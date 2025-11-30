@@ -862,6 +862,8 @@ static int slsi_gscan_add_read_params(struct slsi_nl_gscan_param *nl_gscan_param
 		case GSCAN_ATTRIBUTE_NUM_BUCKETS:
 			if (slsi_util_nla_get_u32(iter, &nl_gscan_param->num_buckets))
 				return -EINVAL;
+			if (nl_gscan_param->num_buckets > SLSI_GSCAN_MAX_BUCKETS)
+				nl_gscan_param->num_buckets = SLSI_GSCAN_MAX_BUCKETS;
 			break;
 		case GSCAN_ATTRIBUTE_CH_BUCKET_1:
 		case GSCAN_ATTRIBUTE_CH_BUCKET_2:
@@ -891,6 +893,9 @@ static int slsi_gscan_add_read_params(struct slsi_nl_gscan_param *nl_gscan_param
 				case GSCAN_ATTRIBUTE_BUCKET_NUM_CHANNELS:
 					if (slsi_util_nla_get_u32(iter1, &(nl_bucket[j].num_channels)))
 						return -EINVAL;
+
+					if (nl_bucket[j].num_channels > SLSI_GSCAN_MAX_CHANNELS)
+						nl_bucket[j].num_channels = SLSI_GSCAN_MAX_CHANNELS;
 					break;
 				case GSCAN_ATTRIBUTE_BUCKET_CHANNELS:
 					nla_for_each_nested(iter2, iter1, tmp2) {
@@ -5896,10 +5901,10 @@ exit:
 	return ret;
 }
 
-static u32 slsi_uc_add_ap_channels(struct wiphy *wiphy, enum nl80211_band band,
-				   struct slsi_usable_channel *buf, u32 cnt, u32 max_cnt)
+static u32 slsi_uc_add_channels(struct wiphy *wiphy, enum nl80211_band band, struct slsi_usable_channel *buf,
+				 u32 cnt, u32 iface_mode, u32 max_cnt)
 {
-	u32                             chan_flags;
+	u32                             chan_flags = IEEE80211_CHAN_DISABLED;
 	int                             i;
 	struct ieee80211_channel        *channel = NULL;
 	u16                             center_freq;
@@ -5909,38 +5914,46 @@ static u32 slsi_uc_add_ap_channels(struct wiphy *wiphy, enum nl80211_band band,
 		SLSI_INFO_NODEV("Band %d not supported\n", band);
 		return 0;
 	}
-	chan_flags = (IEEE80211_CHAN_INDOOR_ONLY | IEEE80211_CHAN_RADAR |
-		      IEEE80211_CHAN_DISABLED | IEEE80211_CHAN_NO_IR);
+
+	if ((iface_mode == SLSI_UC_ITERFACE_STA) ||
+	    (iface_mode == SLSI_UC_ITERFACE_P2P_CLIENT) ||
+	    (iface_mode == SLSI_UC_ITERFACE_P2P_TDLS))
+		chan_flags = IEEE80211_CHAN_DISABLED;
+	if ((iface_mode == SLSI_UC_ITERFACE_P2P_NAN) ||
+	    (iface_mode == SLSI_UC_ITERFACE_P2P_GO))
+		chan_flags = (IEEE80211_CHAN_RADAR | IEEE80211_CHAN_DISABLED | IEEE80211_CHAN_NO_IR);
+	if (iface_mode == SLSI_UC_ITERFACE_SOFTAP)
+		chan_flags = (IEEE80211_CHAN_INDOOR_ONLY | IEEE80211_CHAN_RADAR |
+			      IEEE80211_CHAN_DISABLED | IEEE80211_CHAN_NO_IR);
 
 	for (i = 0; i < chan_data->n_channels; i++) {
 		if (cnt >= max_cnt) {
-			SLSI_INFO_NODEV("ap channel count is over MAX_NUM %d STOP finding...\n", cnt);
+			SLSI_INFO_NODEV("Channel count is over MAX_NUM %d STOP finding...\n", cnt);
 			break;
 		}
 		center_freq = chan_data->channels[i].center_freq;
 		if (chan_data->channels[i].flags & chan_flags) {
-			SLSI_INFO_NODEV("ap invalid freq %d , chan_flags:%x\n", center_freq,
+			SLSI_DBG1_NODEV(SLSI_CFG80211, "invalid freq %d , chan_flags:0x%x\n", center_freq,
 					chan_data->channels[i].flags);
 			continue;
 		}
 
 		channel = ieee80211_get_channel(wiphy, center_freq);
 		if (!channel) {
-			SLSI_INFO_NODEV("Invalid frequency %d used to start AP. Channel not found\n",
-					center_freq);
+			SLSI_ERR_NODEV("Invalid frequency %d used. Channel not found\n", center_freq);
 			continue;
 		}
 #ifdef CONFIG_SCSC_WLAN_SUPPORT_6G
 		if (band == NL80211_BAND_6GHZ &&
 		    !cfg80211_channel_is_psc(channel)) {
-			SLSI_INFO_NODEV("Invalid non-PSC freq %d\n", center_freq);
+			SLSI_DBG1_NODEV(SLSI_CFG80211, "Invalid non-PSC freq %d\n", center_freq);
 			continue;
 		}
 #endif
 		buf[cnt].freq = center_freq;
 		buf[cnt].width = SLSI_LLS_CHAN_WIDTH_20;
-		buf[cnt++].iface_mode_mask = SLSI_UC_ITERFACE_SOFTAP;
-		SLSI_INFO_NODEV("ap valid [%d] freq %d , chan_flags:%x\n", cnt - 1,
+		buf[cnt++].iface_mode_mask = iface_mode;
+		SLSI_DBG1_NODEV(SLSI_CFG80211, "valid [%d] freq %d , chan_flags:0x%x\n", cnt - 1,
 				center_freq, chan_data->channels[i].flags);
 	}
 	return cnt;
@@ -5995,8 +6008,7 @@ static int slsi_get_usable_channels(struct wiphy *wiphy,
 		}
 	}
 
-	if (request.iface_mode == SLSI_UC_ITERFACE_UNKNOWN ||
-	    !(request.iface_mode & SLSI_UC_ITERFACE_SOFTAP)) {
+	if (request.iface_mode == SLSI_UC_ITERFACE_UNKNOWN) {
 		SLSI_ERR_NODEV("iface_mode: %d NOT supported\n", request.iface_mode);
 		ret = -EOPNOTSUPP;
 		goto exit;
@@ -6033,21 +6045,24 @@ static int slsi_get_usable_channels(struct wiphy *wiphy,
 		goto exit_with_chan_list;
 	}
 	if (request.band & SLSI_UC_MAC_2_4_BAND && chan_count < request.max_num)
-		chan_count = slsi_uc_add_ap_channels(wiphy, NL80211_BAND_2GHZ, chan_list, chan_count, request.max_num);
+		chan_count = slsi_uc_add_channels(wiphy, NL80211_BAND_2GHZ, chan_list, chan_count,
+						  request.iface_mode, request.max_num);
 
 	if (request.band & SLSI_UC_MAC_5_BAND && chan_count < request.max_num)
-		chan_count += slsi_uc_add_ap_channels(wiphy, NL80211_BAND_5GHZ, chan_list, chan_count, request.max_num);
+		chan_count = slsi_uc_add_channels(wiphy, NL80211_BAND_5GHZ, chan_list, chan_count,
+						   request.iface_mode, request.max_num);
 
 #ifdef CONFIG_SCSC_WLAN_SUPPORT_6G
 	if (request.band & SLSI_UC_MAC_6_BAND && chan_count < request.max_num)
-		chan_count += slsi_uc_add_ap_channels(wiphy, NL80211_BAND_6GHZ, chan_list, chan_count, request.max_num);
+		chan_count = slsi_uc_add_channels(wiphy, NL80211_BAND_6GHZ, chan_list, chan_count,
+						   request.iface_mode, request.max_num);
 #endif
 
 	ret |= nla_put_u32(reply, SLSI_UC_ATTRIBUTE_NUM_CHANNELS, chan_count);
 	ret |= nla_put(reply, SLSI_UC_ATTRIBUTE_CHANNEL_LIST,
 		       chan_count * sizeof(struct slsi_usable_channel), chan_list);
 	if (ret) {
-		SLSI_ERR(sdev, "Error in nla_put*:%x\n", ret);
+		SLSI_ERR(sdev, "Error in nla_put*:0x%x\n", ret);
 		kfree_skb(reply);
 		goto exit_with_chan_list;
 	}
@@ -6061,9 +6076,6 @@ exit_with_chan_list:
 exit:
 	return ret;
 }
-
-/*TODO: define will be removed when autogen to be done*/
-#define SLSI_PSID_UNIFI_DTIM_MULTIPLIER 3002 /* unifiDTIMMultiplier */
 
 static int slsi_set_dtim_config(struct wiphy *wiphy, struct wireless_dev *wdev, const void *data, int len)
 {
@@ -6290,10 +6302,10 @@ slsi_wlan_vendor_low_latency_policy[SLSI_NL_ATTRIBUTE_LATENCY_MAX + 1] = {
 
 static const struct nla_policy
 slsi_wlan_vendor_usable_channels_policy[SLSI_UC_ATTRIBUTE_MAX + 1] = {
-	[SLSI_UC_ATTRIBUTE_BAND] = {.type = NLA_U32},
-	[SLSI_UC_ATTRIBUTE_IFACE_MODE] = {.type = NLA_U32},
-	[SLSI_UC_ATTRIBUTE_FILTER] = {.type = NLA_U32},
-	[SLSI_UC_ATTRIBUTE_MAX_NUM] = {.type = NLA_U32},
+        [SLSI_UC_ATTRIBUTE_BAND] = {.type = NLA_U32},
+        [SLSI_UC_ATTRIBUTE_IFACE_MODE] = {.type = NLA_U32},
+        [SLSI_UC_ATTRIBUTE_FILTER] = {.type = NLA_U32},
+        [SLSI_UC_ATTRIBUTE_MAX_NUM] = {.type = NLA_U32},
 };
 
 static const struct nla_policy
@@ -7176,6 +7188,14 @@ static struct wiphy_vendor_command slsi_vendor_cmd[] = {
 		},
 		.flags =  WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = slsi_set_dtim_config
+	},
+	{
+		{
+			.vendor_id = OUI_GOOGLE,
+			.subcmd = SLSI_NL80211_VENDOR_SUBCMD_GET_USABLE_CHANNELS
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = slsi_get_usable_channels
 	},
 
 #ifdef CONFIG_SCSC_WLAN_SAR_SUPPORTED

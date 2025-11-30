@@ -13,7 +13,7 @@
 #ifndef IS_VENDOR_CONFIG_H
 #define IS_VENDOR_CONFIG_H
 
-#define USE_BINARY_PADDING_DATA_ADDED             /* Apply Sign DDK/RTA Binary */
+#define USE_BINARY_PADDING_DATA_ADDED            /* Apply Sign DDK/RTA Binary */
 
 #if defined(USE_BINARY_PADDING_DATA_ADDED) && (defined(CONFIG_USE_SIGNED_BINARY) || defined(CONFIG_SAMSUNG_PRODUCT_SHIP))
 #define TZ_CONTROLLED_MEM_ATTRIBUTE 1
@@ -43,6 +43,10 @@
 #include "aay_v26x/is-vendor-config_aay_v26x.h"
 #elif defined(CONFIG_CAMERA_MMY_M36X)
 #include "mmy_v36x/is-vendor-config_mmy_v36x.h"
+#elif defined(CONFIG_CAMERA_MMY_M36X_KOR)
+#include "mmy_v36x/is-vendor-config_mmy_v36x_kor.h"
+#elif defined(CONFIG_CAMERA_STY_V40)
+#include "sty_v40/is-vendor-config_sty_v40.h"
 #else
 #include "aaw_v54x/is-vendor-config_aaw_v54x.h"
 #endif

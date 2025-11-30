@@ -1066,8 +1066,8 @@
 					pinctrl-names = "da7280_default";
 					pinctrl-0 = <0x32>;
 					dlg,actuator-type = "LRA";
-					dlg,dlg,const-op-mode = <0x01>;
-					dlg,dlg,periodic-op-mode = <0x01>;
+					dlg,const-op-mode = <0x01>;
+					dlg,periodic-op-mode = <0x01>;
 					dlg,nom-microvolt = <0x1e8480>;
 					dlg,abs-max-microvolt = <0x1e8480>;
 					dlg,imax-microamp = <0x1f7e8>;

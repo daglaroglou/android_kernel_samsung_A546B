@@ -112,3 +112,15 @@ config CAMERA_MMY_M36X
         default n
         help
          This camera is mmy_v36x
+config CAMERA_MMY_M36X_KOR
+        bool "This camera is mmy_v36x"
+        depends on CAMERA_VENDER_MCD_V2
+        default n
+        help
+         This camera is mmy_v36x
+config CAMERA_STY_V40
+        bool "This camera is STY_V40"
+        depends on CAMERA_VENDER_MCD_V2
+        default n
+        help
+         This camera is sty_v40

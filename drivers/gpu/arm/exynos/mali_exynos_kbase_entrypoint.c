@@ -46,6 +46,8 @@
 #include <mali_exynos_ioctl.h>
 
 #include <gpexbe_clock.h>
+#include <mali_kbase_defs.h>
+#include <linux/clk.h>
 
 static int mali_exynos_ioctl_amigo_flags_fn(struct kbase_context *kctx,
 					    struct mali_exynos_ioctl_amigo_flags *flags)
@@ -466,6 +468,78 @@ static void mali_exynos_kbase_context_term(struct kbase_context *kctx)
 	kfree(kctx->platform_data);
 }
 
+
+static void *enumerate_gpu_clk(struct kbase_device *kbdev, unsigned int index)
+{
+	if (index >= kbdev->nr_clocks)
+		return NULL;
+
+#if MALI_USE_CSF
+	if (of_machine_is_compatible("arm,juno"))
+		WARN_ON(kbdev->nr_clocks != 1);
+#endif
+	return kbdev->clocks[index];
+}
+
+static unsigned long get_gpu_clk_rate(struct kbase_device *kbdev, void *gpu_clk_handle)
+{
+	CSTD_UNUSED(kbdev);
+#if MALI_USE_CSF
+	/* On Juno fpga platforms, the GPU clock rate is reported as 600 MHZ at
+	 * the boot time. Then after the first call to kbase_devfreq_target()
+	 * the clock rate is reported as 450 MHZ and the frequency does not
+	 * change after that. But the actual frequency at which GPU operates
+	 * is always 50 MHz, which is equal to the frequency of system counter
+	 * and HW counters also increment at the same rate.
+	 * DVFS, which is a client of kbase_ipa_control, needs normalization of
+	 * GPU_ACTIVE counter to calculate the time for which GPU has been busy.
+	 * So for the correct normalization need to return the system counter
+	 * frequency value.
+	 * This is a reasonable workaround as the frequency value remains same
+	 * throughout. It can be removed after GPUCORE-25693.
+	 */
+	if (of_machine_is_compatible("arm,juno"))
+		return arch_timer_get_cntfrq();
+#endif
+	return gpexbe_clock_get_rate();
+}
+
+static int gpu_clk_notifier_register(struct kbase_device *kbdev, void *gpu_clk_handle,
+				     struct notifier_block *nb)
+{
+	CSTD_UNUSED(kbdev);
+
+	compiletime_assert(offsetof(struct clk_notifier_data, clk) ==
+				   offsetof(struct kbase_gpu_clk_notifier_data, gpu_clk_handle),
+			   "mismatch in the offset of clk member");
+
+	compiletime_assert(
+		sizeof(((struct clk_notifier_data *)0)->clk) ==
+			sizeof(((struct kbase_gpu_clk_notifier_data *)0)->gpu_clk_handle),
+		"mismatch in the size of clk member");
+
+#if MALI_USE_CSF
+	/* Frequency is fixed on Juno platforms */
+	if (of_machine_is_compatible("arm,juno"))
+		return 0;
+#endif
+
+	return clk_notifier_register((struct clk *)gpu_clk_handle, nb);
+}
+
+static void gpu_clk_notifier_unregister(struct kbase_device *kbdev, void *gpu_clk_handle,
+					struct notifier_block *nb)
+{
+	CSTD_UNUSED(kbdev);
+
+#if MALI_USE_CSF
+	if (of_machine_is_compatible("arm,juno"))
+		return;
+#endif
+
+	clk_notifier_unregister((struct clk *)gpu_clk_handle, nb);
+}
+
 struct kbase_platform_funcs_conf platform_funcs = {
 	.platform_init_func = &mali_exynos_kbase_entrypoint_init,
 	.platform_term_func = &mali_exynos_kbase_entrypoint_term,
@@ -485,6 +559,14 @@ struct kbase_pm_callback_conf pm_callbacks = {
 	.power_runtime_term_callback = gpu_device_runtime_disable,
 	.power_runtime_on_callback = pm_callback_runtime_on,
 	.power_runtime_off_callback = pm_callback_runtime_off,
+};
+
+
+struct kbase_clk_rate_trace_op_conf clk_rate_trace_ops = {
+	.get_gpu_clk_rate = get_gpu_clk_rate,
+	.enumerate_gpu_clk = enumerate_gpu_clk,
+	.gpu_clk_notifier_register = gpu_clk_notifier_register,
+	.gpu_clk_notifier_unregister = gpu_clk_notifier_unregister,
 };
 
 MODULE_SOFTDEP("pre: exynos-acme");

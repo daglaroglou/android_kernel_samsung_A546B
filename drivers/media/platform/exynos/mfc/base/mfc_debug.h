@@ -223,9 +223,9 @@
 				core_ctx->core->name, core_ctx->num, __func__, __LINE__, ##args);	\
 	} while (0)
 
-#define MFC_TRACE_STR_LEN		80
+#define MFC_TRACE_STR_LEN		100
 #define MFC_TRACE_COUNT_MAX		1024
-#define MFC_TRACE_COUNT_PRINT		50
+#define MFC_TRACE_COUNT_PRINT		80
 #define MFC_TRACE_COUNT_PRINT_LONG	100
 #define MFC_TRACE_LOG_STR_LEN		25
 #define MFC_TRACE_LOG_COUNT_MAX		256

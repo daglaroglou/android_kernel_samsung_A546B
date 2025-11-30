@@ -38,6 +38,7 @@
 #include "is-dt.h"
 #include "is-cis-gc5035.h"
 #include "is-cis-gc5035-setA.h"
+#include "is-cis-gc5035-setB.h"
 
 #include "is-helper-ixc.h"
 #include "is-vender-specific.h"
@@ -636,9 +637,12 @@ static int sensor_gc5035_cis_dpc_enable(struct v4l2_subdev *subdev) {
 	u8 num_defect_1;
 	u8 num_defect_2;
 	u8 num_defect_total;
+	char const *setfile;
 
 	struct is_cis *cis;
 	struct i2c_client *client;
+	struct device_node *dnode;
+	struct device *dev;
 
 	FIMC_BUG(!subdev);
 
@@ -654,6 +658,9 @@ static int sensor_gc5035_cis_dpc_enable(struct v4l2_subdev *subdev) {
 		return -EINVAL;
 	}
 
+	dev = &client->dev;
+	dnode = dev->of_node;
+
 	/* Step 1. Basic setting for OTP and Check the chip id */
 	ret = sensor_gc5035_check_rev(cis);
 	if (ret < 0) {
@@ -666,9 +673,28 @@ static int sensor_gc5035_cis_dpc_enable(struct v4l2_subdev *subdev) {
 		return ret;
 	} else {
 		info("[%s] Enable DPC", __func__);
-		sensor_gc5035_setfiles = sensor_gc5035_dpc_setfiles_A;
-		sensor_gc5035_setfile_sizes = sensor_gc5035_dpc_setfile_A_sizes;
-		sensor_gc5035_max_setfile_num = ARRAY_SIZE(sensor_gc5035_dpc_setfiles_A);
+		ret = of_property_read_string(dnode, "setfile", &setfile);
+		if (ret) {
+			err("setfile index read fail(%d), take default setfile!!", ret);
+			setfile = "default";
+		}
+
+		if (strcmp(setfile, "default") == 0 || strcmp(setfile, "setA") == 0) {
+			info("%s dpc_setfile_A\n", __func__);
+			sensor_gc5035_setfiles = sensor_gc5035_dpc_setfiles_A;
+			sensor_gc5035_setfile_sizes = sensor_gc5035_dpc_setfile_A_sizes;
+			sensor_gc5035_max_setfile_num = ARRAY_SIZE(sensor_gc5035_dpc_setfiles_A);
+		} else if (strcmp(setfile, "setB") == 0) {
+			info("%s dpc_setfile_B\n", __func__);
+			sensor_gc5035_setfiles = sensor_gc5035_dpc_setfiles_B;
+			sensor_gc5035_setfile_sizes = sensor_gc5035_dpc_setfile_B_sizes;
+			sensor_gc5035_max_setfile_num = ARRAY_SIZE(sensor_gc5035_dpc_setfiles_B);
+		} else {
+			err("%s setfile index out of bound, take default (dpc_setfile_A)", __func__);
+			sensor_gc5035_setfiles = sensor_gc5035_dpc_setfiles_A;
+			sensor_gc5035_setfile_sizes = sensor_gc5035_dpc_setfile_A_sizes;
+			sensor_gc5035_max_setfile_num = ARRAY_SIZE(sensor_gc5035_dpc_setfiles_A);
+		}
 	}
 
 	IXC_MUTEX_LOCK(cis->ixc_lock);
@@ -703,9 +729,6 @@ static int sensor_gc5035_cis_dpc_enable(struct v4l2_subdev *subdev) {
 		goto p_err;
 
 	ret = cis->ixc_ops->addr8_read8(client, 0x6c, &num_defect_1);
-	if (ret < 0)
-		goto p_err;
-	ret = cis->ixc_ops->addr8_write8(client, 0x69, 0x00);
 	if (ret < 0)
 		goto p_err;
 
@@ -2141,9 +2164,15 @@ int sensor_gc5035_cis_get_otprom_data(struct v4l2_subdev *subdev, char *buf, boo
 	}
 
 	if (rom_id == 1) {
+#ifdef GC5035_GTS10LITE_FRONT
+		bank1_addr = GC5035_MACRO_OTP_START_ADDR_BANK1;
+		bank2_addr = GC5035_MACRO_OTP_START_ADDR_BANK2;
+		cal_size = GC5035_MACRO_OTP_USED_CAL_SIZE;
+#else
 		bank1_addr = GC5035_FRONT_OTP_START_ADDR_BANK1;
 		bank2_addr = GC5035_FRONT_OTP_START_ADDR_BANK2;
 		cal_size = GC5035_FRONT_OTP_USED_CAL_SIZE;
+#endif
 	} else if (rom_id == 2) {
 		bank1_addr = GC5035_BOKEH_OTP_START_ADDR_BANK1;
 		bank2_addr = GC5035_BOKEH_OTP_START_ADDR_BANK2;
@@ -2280,25 +2309,55 @@ int cis_gc5035_probe(struct i2c_client *client,
 		setfile = "default";
 	}
 
-	if (strcmp(setfile, "default") == 0 || strcmp(setfile, "setA") == 0)
-		probe_info("[%s] setfile_A mclk: 26Mhz \n", __func__);
-	else
-		err("setfile index out of bound, take default (setfile_A mclk: 26Mhz)");
-
-	sensor_gc5035_global = sensor_gc5035_setfile_A_Global;
-	sensor_gc5035_global_size = ARRAY_SIZE(sensor_gc5035_setfile_A_Global);
-	sensor_gc5035_setfiles = sensor_gc5035_setfiles_A;
-	sensor_gc5035_setfile_sizes = sensor_gc5035_setfile_A_sizes;
-	sensor_gc5035_pllinfos = sensor_gc5035_pllinfos_A;
-	sensor_gc5035_max_setfile_num = ARRAY_SIZE(sensor_gc5035_setfiles_A);
-	sensor_gc5035_fsync_master = sensor_gc5035_setfile_A_Fsync_Master;
-	sensor_gc5035_fsync_master_size = ARRAY_SIZE(sensor_gc5035_setfile_A_Fsync_Master);
-	sensor_gc5035_fsync_slave = sensor_gc5035_setfile_A_Fsync_Slave;
-	sensor_gc5035_fsync_slave_size = ARRAY_SIZE(sensor_gc5035_setfile_A_Fsync_Slave);
-	sensor_gc5035_dpc_init_setting = sensor_gc5035_setfile_A_Otp_Read_Initial_Setting;
-	sensor_gc5035_dpc_init_setting_size = ARRAY_SIZE(sensor_gc5035_setfile_A_Otp_Read_Initial_Setting);
-	sensor_gc5035_dpc_function_enable = sensor_gc5035_setfile_A_DPC_Function_Enable;
-	sensor_gc5035_dpc_function_enable_size = ARRAY_SIZE(sensor_gc5035_setfile_A_DPC_Function_Enable);
+	if (strcmp(setfile, "default") == 0 || strcmp(setfile, "setA") == 0) {
+		probe_info("%s setfile_A mclk: 26Mhz \n", __func__);
+		sensor_gc5035_global = sensor_gc5035_setfile_A_Global;
+		sensor_gc5035_global_size = ARRAY_SIZE(sensor_gc5035_setfile_A_Global);
+		sensor_gc5035_setfiles = sensor_gc5035_setfiles_A;
+		sensor_gc5035_setfile_sizes = sensor_gc5035_setfile_A_sizes;
+		sensor_gc5035_pllinfos = sensor_gc5035_pllinfos_A;
+		sensor_gc5035_max_setfile_num = ARRAY_SIZE(sensor_gc5035_setfiles_A);
+		sensor_gc5035_fsync_master = sensor_gc5035_setfile_A_Fsync_Master;
+		sensor_gc5035_fsync_master_size = ARRAY_SIZE(sensor_gc5035_setfile_A_Fsync_Master);
+		sensor_gc5035_fsync_slave = sensor_gc5035_setfile_A_Fsync_Slave;
+		sensor_gc5035_fsync_slave_size = ARRAY_SIZE(sensor_gc5035_setfile_A_Fsync_Slave);
+		sensor_gc5035_dpc_init_setting = sensor_gc5035_setfile_A_Otp_Read_Initial_Setting;
+		sensor_gc5035_dpc_init_setting_size = ARRAY_SIZE(sensor_gc5035_setfile_A_Otp_Read_Initial_Setting);
+		sensor_gc5035_dpc_function_enable = sensor_gc5035_setfile_A_DPC_Function_Enable;
+		sensor_gc5035_dpc_function_enable_size = ARRAY_SIZE(sensor_gc5035_setfile_A_DPC_Function_Enable);
+	} else if (strcmp(setfile, "setB") == 0) {
+		probe_info("%s setfile_B mclk: 26Mhz \n", __func__);
+		sensor_gc5035_global = sensor_gc5035_setfile_B_Global;
+		sensor_gc5035_global_size = ARRAY_SIZE(sensor_gc5035_setfile_B_Global);
+		sensor_gc5035_setfiles = sensor_gc5035_setfiles_B;
+		sensor_gc5035_setfile_sizes = sensor_gc5035_setfile_B_sizes;
+		sensor_gc5035_pllinfos = sensor_gc5035_pllinfos_B;
+		sensor_gc5035_max_setfile_num = ARRAY_SIZE(sensor_gc5035_setfiles_B);
+		sensor_gc5035_fsync_master = sensor_gc5035_setfile_B_Fsync_Master;
+		sensor_gc5035_fsync_master_size = ARRAY_SIZE(sensor_gc5035_setfile_B_Fsync_Master);
+		sensor_gc5035_fsync_slave = sensor_gc5035_setfile_B_Fsync_Slave;
+		sensor_gc5035_fsync_slave_size = ARRAY_SIZE(sensor_gc5035_setfile_B_Fsync_Slave);
+		sensor_gc5035_dpc_init_setting = sensor_gc5035_setfile_B_Otp_Read_Initial_Setting;
+		sensor_gc5035_dpc_init_setting_size = ARRAY_SIZE(sensor_gc5035_setfile_B_Otp_Read_Initial_Setting);
+		sensor_gc5035_dpc_function_enable = sensor_gc5035_setfile_B_DPC_Function_Enable;
+		sensor_gc5035_dpc_function_enable_size = ARRAY_SIZE(sensor_gc5035_setfile_B_DPC_Function_Enable);
+	} else {
+		err("%s setfile index out of bound, take default (setfile_A)", __func__);
+		sensor_gc5035_global = sensor_gc5035_setfile_A_Global;
+		sensor_gc5035_global_size = ARRAY_SIZE(sensor_gc5035_setfile_A_Global);
+		sensor_gc5035_setfiles = sensor_gc5035_setfiles_A;
+		sensor_gc5035_setfile_sizes = sensor_gc5035_setfile_A_sizes;
+		sensor_gc5035_pllinfos = sensor_gc5035_pllinfos_A;
+		sensor_gc5035_max_setfile_num = ARRAY_SIZE(sensor_gc5035_setfiles_A);
+		sensor_gc5035_fsync_master = sensor_gc5035_setfile_A_Fsync_Master;
+		sensor_gc5035_fsync_master_size = ARRAY_SIZE(sensor_gc5035_setfile_A_Fsync_Master);
+		sensor_gc5035_fsync_slave = sensor_gc5035_setfile_A_Fsync_Slave;
+		sensor_gc5035_fsync_slave_size = ARRAY_SIZE(sensor_gc5035_setfile_A_Fsync_Slave);
+		sensor_gc5035_dpc_init_setting = sensor_gc5035_setfile_A_Otp_Read_Initial_Setting;
+		sensor_gc5035_dpc_init_setting_size = ARRAY_SIZE(sensor_gc5035_setfile_A_Otp_Read_Initial_Setting);
+		sensor_gc5035_dpc_function_enable = sensor_gc5035_setfile_A_DPC_Function_Enable;
+		sensor_gc5035_dpc_function_enable_size = ARRAY_SIZE(sensor_gc5035_setfile_A_DPC_Function_Enable);
+	}
 
 	probe_info("%s done\n", __func__);
 

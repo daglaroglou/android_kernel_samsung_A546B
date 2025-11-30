@@ -41,7 +41,7 @@
 		sleep-clk {
 			compatible = "fixed-clock";
 			#clock-cells = <0x00>;
-			clock-frequency = <0x8000>;
+			clock-frequency = <0x7ffc>;
 			clock-output-names = "sleep_clk";
 			phandle = <0x44>;
 		};
@@ -735,6 +735,8 @@
 			#address-cells = <0x01>;
 			#size-cells = <0x01>;
 			ranges;
+			interrupts = <0x00 0xb4 0x04 0x00 0x137 0x04 0x00 0x85 0x04 0x00 0x136 0x04>;
+			interrupt-names = "pwr_event\0qusb2_phy\0hs_phy_irq\0ss_phy_irq";
 			clocks = <0x15 0x72 0x15 0x6d 0x15 0x8a 0x15 0x73>;
 			clock-names = "core\0iface\0sleep\0mock_utmi\0ref\0xo";
 			assigned-clocks = <0x15 0x73 0x15 0x72>;

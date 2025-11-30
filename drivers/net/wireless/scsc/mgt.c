@@ -991,6 +991,8 @@ int slsi_start(struct slsi_dev *sdev, struct net_device *dev)
 		err = __set_country_update_regd(sdev, alpha2, 3, true);
 		if (err < 0)
 			goto err_hip_started;
+		else
+			err = 0;
 	}
 
 	if (!sdev->mac_changed) {
@@ -6632,6 +6634,7 @@ int slsi_read_regulatory_rules(struct slsi_dev *sdev, struct slsi_802_11d_reg_do
 	int i = 0;
 	int country_index = 0;
 	struct ieee80211_reg_rule *reg_rule = NULL;
+	int num_rules = 0;
 
 	if ((sdev->regdb.regdb_state == SLSI_REG_DB_NOT_SET) || (sdev->regdb.regdb_state == SLSI_REG_DB_ERROR)) {
 		SLSI_ERR(sdev, "Regulatory is not set!\n");
@@ -6650,30 +6653,32 @@ int slsi_read_regulatory_rules(struct slsi_dev *sdev, struct slsi_802_11d_reg_do
 	domain_info->regdomain->dfs_region = sdev->regdb.country[country_index].operating_class_set;
 
 	for (i = 0; i < sdev->regdb.country[country_index].collection->reg_rule_num; i++) {
-		reg_rule = &domain_info->regdomain->reg_rules[i];
+		if (sdev->regdb.country[country_index].collection->reg_rule[i]->flags & SLSI_REGULATORY_DUP_RULE)
+			break;
+		reg_rule = &domain_info->regdomain->reg_rules[num_rules++];
 
 		/* start freq 2 bytes */
-		reg_rule->freq_range.start_freq_khz = (sdev->regdb.country[country_index].collection->reg_rule[i]->freq_range->start_freq * 1000);
+		reg_rule->freq_range.start_freq_khz = sdev->regdb.country[country_index].collection->reg_rule[i]->freq_range->start_freq * 1000;
 
 		/* end freq 2 bytes */
-		reg_rule->freq_range.end_freq_khz = (sdev->regdb.country[country_index].collection->reg_rule[i]->freq_range->end_freq * 1000);
+		reg_rule->freq_range.end_freq_khz = sdev->regdb.country[country_index].collection->reg_rule[i]->freq_range->end_freq * 1000;
 
 		/* Max Bandwidth 1 byte */
-		reg_rule->freq_range.max_bandwidth_khz = (sdev->regdb.country[country_index].collection->reg_rule[i]->freq_range->max_bandwidth * 1000);
+		reg_rule->freq_range.max_bandwidth_khz = sdev->regdb.country[country_index].collection->reg_rule[i]->freq_range->max_bandwidth * 1000;
 
 		/* max_antenna_gain is obsolete now. */
 		reg_rule->power_rule.max_antenna_gain = 0;
 
 		/* Max Power 1 byte */
-		reg_rule->power_rule.max_eirp = (sdev->regdb.country[country_index].collection->reg_rule[i]->max_eirp * 100);
+		reg_rule->power_rule.max_eirp = sdev->regdb.country[country_index].collection->reg_rule[i]->max_eirp * 100;
 
 		/* Flags 1 byte */
 		reg_rule->flags = slsi_remap_reg_rule_flags(sdev->regdb.country[country_index].collection->reg_rule[i]->flags);
 	}
 
-	domain_info->regdomain->n_reg_rules = sdev->regdb.country[country_index].collection->reg_rule_num;
+	domain_info->regdomain->n_reg_rules = num_rules;
 
-	return 0;
+	return country_index;
 }
 
 /* Set the rssi boost value of a particular band as set in the SETJOINPREFER command*/
@@ -7171,7 +7176,7 @@ int slsi_set_mac_randomisation_mask(struct slsi_dev *sdev, u8 *mac_address_mask)
 static int __set_country_update_regd(struct slsi_dev *sdev, const char *alpha2_code, int size, bool force)
 {
 	char alpha2[4];
-	int  error = 0;
+	int  error = 0, cc_index;
 	bool is_new_country;
 
 	SLSI_DBG2(sdev, SLSI_MLME, "Set country code: %c%c\n", alpha2_code[0], alpha2_code[1]);
@@ -7198,7 +7203,8 @@ static int __set_country_update_regd(struct slsi_dev *sdev, const char *alpha2_c
 	}
 
 	/* Read the regulatory params for the country */
-	if (slsi_read_regulatory_rules(sdev, &sdev->device_config.domain_info, alpha2) == 0) {
+	cc_index = slsi_read_regulatory_rules(sdev, &sdev->device_config.domain_info, alpha2);
+	if (cc_index >= 0) {
 		if (is_new_country) {
 			slsi_reset_channel_flags(sdev);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0))
@@ -7213,16 +7219,20 @@ static int __set_country_update_regd(struct slsi_dev *sdev, const char *alpha2_c
 #ifdef CONFIG_CFG80211_CRDA_SUPPORT
 		slsi_update_custom_regulatory_orig_flags(sdev);
 #endif
+		sdev->regdb.current_cc_index = cc_index;
 	}
 
 	SLSI_MUTEX_UNLOCK(sdev->device_config_mutex);
-	return error;
+	return cc_index;
 }
 
 /* Set the new country code and read the regulatory parameters of updated country. */
 int slsi_set_country_update_regd(struct slsi_dev *sdev, const char *alpha2_code, int size)
 {
-	return __set_country_update_regd(sdev, alpha2_code, size, false);
+	if (__set_country_update_regd(sdev, alpha2_code, size, false) < 0)
+		return -1;
+	else
+		return 0;
 }
 
 /* Read unifiDisconnectTimeOut MIB */

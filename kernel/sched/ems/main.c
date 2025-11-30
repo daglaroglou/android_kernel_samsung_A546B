@@ -19,6 +19,10 @@
 
 #include <dt-bindings/soc/samsung/ems.h>
 
+#define MAX_CGROUP_MAP 32
+
+static int cgroup_map[MAX_CGROUP_MAP] = { CGROUP_ROOT };
+
 /******************************************************************************
  * panic handler for scheduler debugging                                      *
  ******************************************************************************/
@@ -421,6 +425,23 @@ int get_sched_class(struct task_struct *p)
 	return 1 << class_idx;
 }
 
+void ems_init_cgroup_map(struct cgroup_subsys_state *css)
+{
+	const char *name = css->cgroup->kn->name;
+	int i = 0;
+	int idx = 0;
+
+	/* update cgroup index by name */
+	for (i = 0; i < CGROUP_COUNT; i++) {
+		if (!strcmp(name, task_cgroup_name[i])) {
+			idx = css->id - 1;
+			cgroup_map[idx] = i;
+			pr_info("%s: '%s' cgroup idx=%d -> ems_idx=%d\n", __func__, name, idx, i);
+			break;
+		}
+	}
+}
+
 int cpuctl_task_group_idx(struct task_struct *p)
 {
 	int idx;
@@ -429,6 +450,8 @@ int cpuctl_task_group_idx(struct task_struct *p)
 	rcu_read_lock();
 	css = task_css(p, cpu_cgrp_id);
 	idx = css->id - 1;
+	if (idx >= 0 && idx < MAX_CGROUP_MAP)
+		idx = cgroup_map[idx];
 	rcu_read_unlock();
 
 	/* if customer add new group, use the last group */

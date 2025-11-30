@@ -121,6 +121,13 @@ static void s2mpa05_irq_work_func(struct work_struct *work)
 	pr_info("[PMIC] %s: sub(s2mpa05) pmic interrupt %s\n", __func__, buf);
 }
 
+
+static int s2mpa05_enable_irq(struct s2mpa05_dev *s2mpa05, const bool en)
+{
+	return s2mpa05_update_reg(s2mpa05->i2c, S2MPA05_COMMON_TX_MASK,
+			(en) ? 0 : 0x1, 0x1);
+}
+
 static int s2mpa05_notifier_handler(struct notifier_block *nb,
 				    unsigned long action,
 				    void *data)
@@ -138,6 +145,10 @@ static int s2mpa05_notifier_handler(struct notifier_block *nb,
 	/* Read interrupt */
 	irq_cnt = S2MPA05_NUM_IRQ_PMIC_REGS;
 
+	ret = s2mpa05_enable_irq(s2mpa05, false);
+	if (ret)
+		return ret;
+
 	ret = s2mpa05_bulk_read(s2mpa05->pmic, S2MPA05_PM1_INT1,
 				irq_cnt, &irq_reg[S2MPA05_PMIC_INT1]);
 	if (ret) {
@@ -146,6 +157,10 @@ static int s2mpa05_notifier_handler(struct notifier_block *nb,
 
 		return IRQ_HANDLED;
 	}
+
+	ret = s2mpa05_enable_irq(s2mpa05, true);
+	if (ret)
+		return ret;
 
 	queue_delayed_work(s2mpa05->irq_wqueue, &s2mpa05->irq_work, 0);
 

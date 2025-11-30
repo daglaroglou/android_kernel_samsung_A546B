@@ -3470,5 +3470,26 @@ void put_vma(struct vm_area_struct *vma);
 extern unsigned long physpages, codesize, datasize, rosize, bss_size;
 extern unsigned long init_code_size, init_data_size;
 
+#define MB_TO_PAGES(x) ((x) << (20 - PAGE_SHIFT))
+#define GB_TO_PAGES(x) ((x) << (30 - PAGE_SHIFT))
+
+static inline bool file_is_tiny(unsigned long low_threshold)
+{
+	return (global_node_page_state(NR_ACTIVE_FILE) +
+		global_node_page_state(NR_INACTIVE_FILE)) < low_threshold;
+}
+
+static inline unsigned long get_low_threshold(void)
+{
+	if (totalram_pages() > GB_TO_PAGES(4))
+		return MB_TO_PAGES(500);
+	else if (totalram_pages() > GB_TO_PAGES(3))
+		return MB_TO_PAGES(400);
+	else if (totalram_pages() > GB_TO_PAGES(2))
+		return MB_TO_PAGES(300);
+	else
+		return MB_TO_PAGES(200);
+}
+
 #endif /* __KERNEL__ */
 #endif /* _LINUX_MM_H */

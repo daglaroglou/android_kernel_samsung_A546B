@@ -5016,7 +5016,8 @@ int slsi_set_tx_power_sub6_band(struct net_device *dev, char *command, int buf_l
 }
 
 static int slsi_print_regulatory(struct slsi_802_11d_reg_domain *domain_info, char *buf, int buf_len,
-				 struct slsi_sub_band *sub_bands, int sub_band_count)
+				 struct slsi_sub_band *sub_bands, int sub_band_count,
+				 struct regdb_file_reg_country *country_data)
 {
 	int  cur_pos = 0;
 	int  i, j, k;
@@ -5031,6 +5032,7 @@ static int slsi_print_regulatory(struct slsi_802_11d_reg_domain *domain_info, ch
 	int  channel_increment = 0;
 	int  channel_band = 0;
 	bool display_pattern = false;
+	struct regdb_file_reg_rule *regdb_rule;
 
 	cur_pos = snprintf(buf, buf_len, "country %c%c:", domain_info->regdomain->alpha2[0],
 			   domain_info->regdomain->alpha2[1]);
@@ -5060,6 +5062,30 @@ static int slsi_print_regulatory(struct slsi_802_11d_reg_domain *domain_info, ch
 				cur_pos += snprintf(buf + cur_pos, buf_len - cur_pos, ", AUTO_BW");
 		}
 		cur_pos += snprintf(buf + cur_pos, buf_len - cur_pos, "\n");
+	}
+	/* Print duplicate rules that are set in FW */
+	for (i = 0; i < country_data->collection->reg_rule_num; i++) {
+		regdb_rule = country_data->collection->reg_rule[i];
+		if (regdb_rule->flags & SLSI_REGULATORY_DUP_RULE) {
+			cur_pos += snprintf(buf + cur_pos, buf_len - cur_pos, "\t*(%d-%d @ %d), (N/A, %d)",
+					    regdb_rule->freq_range->start_freq,
+					    regdb_rule->freq_range->end_freq,
+					    regdb_rule->freq_range->max_bandwidth,
+					    regdb_rule->max_eirp);
+			if (regdb_rule->flags & SLSI_REGULATORY_DFS)
+				cur_pos += snprintf(buf + cur_pos, buf_len - cur_pos, ", DFS");
+			if (regdb_rule->flags & SLSI_REGULATORY_NO_OFDM)
+				cur_pos += snprintf(buf + cur_pos, buf_len - cur_pos, ", NO_OFDM");
+			if (regdb_rule->flags & SLSI_REGULATORY_NO_IR)
+				cur_pos += snprintf(buf + cur_pos, buf_len - cur_pos, ", NO_IR");
+			if (regdb_rule->flags & SLSI_REGULATORY_NO_INDOOR)
+				cur_pos += snprintf(buf + cur_pos, buf_len - cur_pos, ", NO_INDOOR");
+			if (regdb_rule->flags & SLSI_REGULATORY_NO_OUTDOOR)
+				cur_pos += snprintf(buf + cur_pos, buf_len - cur_pos, ", NO_OUTDOOR");
+			if (regdb_rule->flags & SLSI_REGULATORY_AUTO_BW)
+				cur_pos += snprintf(buf + cur_pos, buf_len - cur_pos, ", AUTO_BW");
+			cur_pos += snprintf(buf + cur_pos, buf_len - cur_pos, " [INTERNAL RULE]\n");
+		}
 	}
 
 	/* Display of Supported Channels for 2.4GHz and 5GHz */
@@ -5213,13 +5239,14 @@ static int slsi_get_regulatory(struct net_device *dev, char *buf, int buf_len)
 
 		sub_band_count = slsi_get_supported_channels(sdev, dev, &sub_bands[0], ARRAY_SIZE(sub_bands));
 		cur_pos += slsi_print_regulatory(&domain_info, buf + cur_pos, buf_len - cur_pos, &sub_bands[0],
-						 sub_band_count);
+						 sub_band_count, &sdev->regdb.country[status]);
 		kfree(domain_info.regdomain);
 	} else if (mode == 0) {
 		SLSI_MUTEX_LOCK(sdev->device_config_mutex);
 		sub_band_count = slsi_get_supported_channels(sdev, dev, &sub_bands[0], ARRAY_SIZE(sub_bands));
 		cur_pos += slsi_print_regulatory(&sdev->device_config.domain_info, buf + cur_pos, buf_len - cur_pos,
-						 &sub_bands[0], sub_band_count);
+						 &sub_bands[0], sub_band_count,
+						 &sdev->regdb.country[sdev->regdb.current_cc_index]);
 		SLSI_MUTEX_UNLOCK(sdev->device_config_mutex);
 	}
 	/* Buf is somewhere close to 4Kbytes. so expect some spare space. If there is no spare

@@ -595,7 +595,14 @@ unsigned long zone_reclaimable_pages(struct zone *zone)
 	if (can_reclaim_anon_pages(NULL, zone_to_nid(zone), NULL))
 		nr += zone_page_state_snapshot(zone, NR_ZONE_INACTIVE_ANON) +
 			zone_page_state_snapshot(zone, NR_ZONE_ACTIVE_ANON);
-
+	/*
+	 * If there are no reclaimable file-backed or anonymous pages,
+	 * ensure zones with sufficient free pages are not skipped.
+	 * This prevents zones like DMA32 from being ignored in reclaim
+	 * scenarios where they can still help alleviate memory pressure.
+	 */
+	if (nr == 0)
+		nr = zone_page_state_snapshot(zone, NR_FREE_PAGES);
 	return nr;
 }
 
@@ -2728,34 +2735,11 @@ enum mem_boost {
 static int mem_boost_mode = NO_BOOST;
 static unsigned long last_mode_change;
 bool am_app_launch = false;
+static unsigned long low_threshold;
 
 #define MEM_BOOST_MAX_TIME (5 * HZ) /* 5 sec */
 
 #ifdef CONFIG_SYSFS
-#define MB_TO_PAGES(x) ((x) << (20 - PAGE_SHIFT))
-#define GB_TO_PAGES(x) ((x) << (30 - PAGE_SHIFT))
-static unsigned long low_threshold;
-
-static inline bool is_too_low_file(void)
-{
-	unsigned long pgdatfile;
-
-	if (!low_threshold) {
-		if (totalram_pages() > GB_TO_PAGES(4))
-			low_threshold = MB_TO_PAGES(500);
-		else if (totalram_pages() > GB_TO_PAGES(3))
-			low_threshold = MB_TO_PAGES(400);
-		else if (totalram_pages() > GB_TO_PAGES(2))
-			low_threshold = MB_TO_PAGES(300);
-		else
-			low_threshold = MB_TO_PAGES(200);
-	}
-
-	pgdatfile = global_node_page_state(NR_ACTIVE_FILE) +
-		    global_node_page_state(NR_INACTIVE_FILE);
-	return pgdatfile < low_threshold;
-}
-
 inline bool need_memory_boosting(void)
 {
 	if (time_after(jiffies, last_mode_change + MEM_BOOST_MAX_TIME))
@@ -2946,7 +2930,7 @@ static void get_scan_count(struct lruvec *lruvec, struct scan_control *sc,
 	trace_android_rvh_set_balance_anon_file_reclaim(&balance_anon_file_reclaim);
 
 	if (current_is_kswapd() && need_memory_boosting() &&
-	    !is_too_low_file()) {
+	    !file_is_tiny(low_threshold)) {
 		scan_balance = SCAN_FILE;
 		goto out;
 	}
@@ -6008,7 +5992,7 @@ static void shrink_lruvec(struct lruvec *lruvec, struct scan_control *sc)
 /* Use reclaim/compaction for costly allocs or under memory pressure */
 static bool in_reclaim_compaction(struct scan_control *sc)
 {
-	if (IS_ENABLED(CONFIG_COMPACTION) && sc->order &&
+	if (gfp_compaction_allowed(sc->gfp_mask) && sc->order &&
 			(sc->order > PAGE_ALLOC_COSTLY_ORDER ||
 			 sc->priority < DEF_PRIORITY - 2))
 		return true;
@@ -6254,6 +6238,9 @@ static inline bool compaction_ready(struct zone *zone, struct scan_control *sc)
 {
 	unsigned long watermark;
 	enum compact_result suitable;
+
+	if (!gfp_compaction_allowed(sc->gfp_mask))
+		return false;
 
 	suitable = compaction_suitable(zone, sc->order, 0, sc->reclaim_idx);
 	if (suitable == COMPACT_SUCCESS)
@@ -6632,7 +6619,7 @@ unsigned long try_to_free_pages(struct zonelist *zonelist, int order,
 		.may_writepage = !laptop_mode,
 		.may_unmap = 1,
 #ifdef CONFIG_DIRECT_RECLAIM_FILE_PAGES_ONLY
-		.may_swap = 0,
+		.may_swap = file_is_tiny(low_threshold) ? 1 : 0,
 #else
 		.may_swap = 1,
 #endif
@@ -7526,6 +7513,7 @@ static int __init kswapd_init(void)
 {
 	int nid;
 
+	low_threshold = get_low_threshold();
 #if CONFIG_KSWAPD_CPU
 	init_kswapd_cpumask();
 #endif

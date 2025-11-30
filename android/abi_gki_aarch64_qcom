@@ -116,6 +116,7 @@
   blk_mq_init_queue
   blk_mq_map_queues
   blk_mq_pci_map_queues
+  blk_mq_quiesce_queue_nowait
   blk_mq_requeue_request
   blk_mq_rq_cpu
   blk_mq_tagset_busy_iter
@@ -721,6 +722,7 @@
   extcon_set_property_capability
   extcon_set_state
   extcon_set_state_sync
+  extcon_sync
   fasync_helper
   __fdget
   fd_install
@@ -1273,6 +1275,7 @@
   mdiobus_write
   mdio_device_create
   mdio_device_free
+  mdio_device_reset
   memblock_end_of_DRAM
   memblock_free
   __memcat_p
@@ -1871,6 +1874,7 @@
   regulator_get_voltage_rdev
   regulator_is_enabled
   regulator_is_supported_voltage
+  regulator_list_voltage_table
   regulator_put
   regulator_register_notifier
   regulator_set_current_limit
@@ -2611,7 +2615,9 @@
   usb_control_msg_send
   usb_debug_root
   usb_decode_ctrl
+  usb_disable_autosuspend
   usb_driver_set_configuration
+  usb_enable_autosuspend
   usb_ep_alloc_request
   usb_ep_autoconfig
   usb_ep_dequeue

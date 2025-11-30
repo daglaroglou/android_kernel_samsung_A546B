@@ -1417,6 +1417,7 @@ p_err:
 void ois_mcu_debug_log(struct ois_mcu_dev *mcu)
 {
 	u8 status, err1, err2;
+
 	status = (u8)is_mcu_get_reg_u8(mcu->regs[OM_REG_CORE], R_OIS_CMD_STATUS);
 	err1 = (u8)is_mcu_get_reg_u8(mcu->regs[OM_REG_CORE], R_OIS_CMD_ERROR_STATUS);
 	err2 = (u8)is_mcu_get_reg_u8(mcu->regs[OM_REG_CORE], R_OIS_CMD_CHECKSUM);
@@ -1488,6 +1489,10 @@ retry_selftest:
 	z_gyro_log = (reg_val << 8) | z;
 
 	info_mcu("%s(GSTLOG0=%d, GSTLOG1=%d, GSTLOG2=%d)\n", __func__, x_gyro_log, y_gyro_log, z_gyro_log);
+
+#ifdef USE_OIS_DEBUGGING_LOG
+	ois_mcu_debug_log(mcu);
+#endif
 
 	info_mcu("%s(%d) : X\n", __func__, val);
 	return (int)val;
@@ -3322,12 +3327,19 @@ bool ois_mcu_gyro_cal(struct is_core *core, long *x_value, long *y_value, long *
 
 	info_mcu("%s : E\n", __func__);
 
+#ifdef USE_OIS_DEBUGGING_LOG
+	ois_mcu_debug_log(mcu);
+#endif
+
 	/* check ois status */
 	do {
 		val = (u8)is_mcu_get_reg_u8(mcu->regs[OM_REG_CORE], R_OIS_CMD_STATUS);
 		msleep(20);
 		if (--retries < 0) {
-			err_mcu("%s Read status failed!!!!, data = 0x%04x\n", __func__, val);
+			err_mcu("%s Read 0x01 status failed!!!!, data = 0x%04x\n", __func__, val);
+#ifdef USE_OIS_DEBUGGING_LOG
+			ois_mcu_debug_log(mcu);
+#endif
 			return false;
 		}
 	} while (val != 0x01);
@@ -3343,11 +3355,15 @@ retry_calibrationtest:
 		val = (u8)is_mcu_get_reg_u8(mcu->regs[OM_REG_CORE], R_OIS_CMD_GYRO_CAL);
 		msleep(15);
 		if (--retries < 0) {
-			err("Read register failed!!!!, data = 0x%04x\n", val);
+			err("Read 0x14 register failed!!!!, data = 0x%04x\n", val);
+#ifdef USE_OIS_DEBUGGING_LOG
+			ois_mcu_debug_log(mcu);
+#endif
 #ifdef RESET_OIS_WHEN_CALIBRATIONTEST_FAILED
 			if (--retries_reset < 0) {
 				break;
 			} else {
+				is_mcu_set_reg_u8(mcu->regs[OM_REG_CORE], R_OIS_CMD_GYRO_CAL, 0x00);
 				ois_mcu_reset(1);
 				goto retry_calibrationtest;
 			}
@@ -3395,6 +3411,10 @@ retry_calibrationtest:
 	*x_value = x_sum * 1000 / scale_factor;
 	*y_value = y_sum * 1000 / scale_factor;
 	*z_value = z_sum * 1000 / scale_factor;
+
+#ifdef USE_OIS_DEBUGGING_LOG
+	ois_mcu_debug_log(mcu);
+#endif
 
 	info_mcu("%s X (x = %ld/y = %ld/z = %ld) : result = %d\n", __func__, *x_value, *y_value, *z_value, result);
 

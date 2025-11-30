@@ -98,7 +98,6 @@
 		phy@58000 {
 			compatible = "qcom,ipq8074-qmp-usb3-phy";
 			reg = <0x58000 0x1c4>;
-			#clock-cells = <0x01>;
 			#address-cells = <0x01>;
 			#size-cells = <0x01>;
 			ranges;
@@ -112,6 +111,7 @@
 			phy@58200 {
 				reg = <0x58200 0x130 0x58400 0x200 0x58800 0x1f8 0x58600 0x44>;
 				#phy-cells = <0x00>;
+				#clock-cells = <0x01>;
 				clocks = <0x03 0x87>;
 				clock-names = "pipe0";
 				clock-output-names = "usb3phy_1_cc_pipe_clk";
@@ -133,7 +133,6 @@
 		phy@78000 {
 			compatible = "qcom,ipq8074-qmp-usb3-phy";
 			reg = <0x78000 0x1c4>;
-			#clock-cells = <0x01>;
 			#address-cells = <0x01>;
 			#size-cells = <0x01>;
 			ranges;
@@ -147,6 +146,7 @@
 			phy@78200 {
 				reg = <0x78200 0x130 0x78400 0x200 0x78800 0x1f8 0x78600 0x44>;
 				#phy-cells = <0x00>;
+				#clock-cells = <0x01>;
 				clocks = <0x03 0x80>;
 				clock-names = "pipe0";
 				clock-output-names = "usb3phy_0_cc_pipe_clk";
@@ -498,6 +498,7 @@
 				interrupts = <0x00 0x8c 0x04>;
 				phys = <0x0e 0x0f>;
 				phy-names = "usb2-phy\0usb3-phy";
+				snps,parkmode-disable-ss-quirk;
 				snps,is-utmi-l1-suspend;
 				snps,hird-threshold = [00];
 				snps,dis_u2_susphy_quirk;
@@ -527,6 +528,7 @@
 				interrupts = <0x00 0x63 0x04>;
 				phys = <0x10 0x11>;
 				phy-names = "usb2-phy\0usb3-phy";
+				snps,parkmode-disable-ss-quirk;
 				snps,is-utmi-l1-suspend;
 				snps,hird-threshold = [00];
 				snps,dis_u2_susphy_quirk;

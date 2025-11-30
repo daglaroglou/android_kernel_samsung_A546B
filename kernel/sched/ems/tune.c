@@ -201,7 +201,7 @@ EXPORT_SYMBOL_GPL(emstune_unregister_notifier);
 /******************************************************************************
  * initializing and parsing parameter                                         *
  ******************************************************************************/
-static char *task_cgroup_name[] = {
+char *task_cgroup_name[] = {
 	"root",
 	"foreground",
 	"background",

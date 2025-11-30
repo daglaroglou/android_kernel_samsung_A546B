@@ -82,7 +82,7 @@
 
 		sleep-clk {
 			compatible = "fixed-clock";
-			clock-frequency = <0x8000>;
+			clock-frequency = <0x7ffc>;
 			#clock-cells = <0x00>;
 			phandle = <0x1c>;
 		};
@@ -1656,6 +1656,7 @@
 			resets = <0x4d 0x00>;
 			reset-names = "ufsphy";
 			status = "disabled";
+			power-domains = <0x03 0x04>;
 			phandle = <0x100>;
 
 			phy@1d87400 {

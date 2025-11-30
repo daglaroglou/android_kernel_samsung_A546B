@@ -61,6 +61,7 @@ int __is_mcu_hw_sram_dump(void __iomem *base, unsigned int range);
 int __is_mcu_hw_cr_dump(void __iomem *base);
 int __is_mcu_hw_peri1_dump(void __iomem *base);
 int __is_mcu_hw_peri2_dump(void __iomem *base);
+void __is_mcu_hw_show_peri_status(void __iomem *base);
 
 /*
  * control function

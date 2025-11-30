@@ -156,6 +156,15 @@ enum pci_interrupt_pin {
 #define PCI_NUM_INTX	4
 
 /*
+ * Reading from a device that doesn't respond typically returns ~0.  A
+ * successful read from a device may also return ~0, so you need additional
+ * information to reliably identify errors.
+ */
+#define PCI_ERROR_RESPONSE		(~0ULL)
+#define PCI_SET_ERROR_RESPONSE(val)	(*(val) = ((typeof(*(val))) PCI_ERROR_RESPONSE))
+#define PCI_POSSIBLE_ERROR(val)		((val) == ((typeof(val)) PCI_ERROR_RESPONSE))
+
+/*
  * pci_power_t values must match the bits in the Capabilities PME_Support
  * and Control/Status PowerState fields in the Power Management capability.
  */
@@ -2414,6 +2423,12 @@ bool pci_pr3_present(struct pci_dev *pdev);
 static inline struct irq_domain *
 pci_host_bridge_acpi_msi_domain(struct pci_bus *bus) { return NULL; }
 static inline bool pci_pr3_present(struct pci_dev *pdev) { return false; }
+#endif
+
+#if defined(CONFIG_X86) && defined(CONFIG_ACPI)
+bool arch_pci_dev_is_removable(struct pci_dev *pdev);
+#else
+static inline bool arch_pci_dev_is_removable(struct pci_dev *pdev) { return false; }
 #endif
 
 #ifdef CONFIG_EEH

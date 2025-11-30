@@ -341,6 +341,7 @@ struct hnae3_dev_specs {
 	u8 max_non_tso_bd_num; /* max BD number of one non-TSO packet */
 	u16 max_frm_size;
 	u16 max_qset_num;
+	u16 umv_size;
 };
 
 struct hnae3_client_ops {
@@ -828,7 +829,7 @@ struct hnae3_handle {
 		struct hnae3_roce_private_info rinfo;
 	};
 
-	u32 numa_node_mask;	/* for multi-chip support */
+	nodemask_t numa_node_mask; /* for multi-chip support */
 
 	enum hnae3_port_base_vlan_state port_base_vlan_state;
 
@@ -884,4 +885,6 @@ int hnae3_register_client(struct hnae3_client *client);
 void hnae3_set_client_init_flag(struct hnae3_client *client,
 				struct hnae3_ae_dev *ae_dev,
 				unsigned int inited);
+void hnae3_acquire_unload_lock(void);
+void hnae3_release_unload_lock(void);
 #endif

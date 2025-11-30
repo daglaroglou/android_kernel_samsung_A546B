@@ -157,6 +157,12 @@ static void s2mpu16_irq_work_func(struct work_struct *work)
 	pr_info("[PMIC] %s: sub(s2mpu16) pmic interrupt %s\n", __func__, buf);
 }
 
+static int s2mpu16_enable_irq(struct s2mpu16_dev *s2mpu16, const bool en)
+{
+	return s2mpu16_update_reg(s2mpu16->i2c, S2MPU16_COMMON_TX_MASK,
+			(en) ? 0 : 0x1, 0x1);
+}
+
 static int s2mpu16_notifier_handler(struct notifier_block *nb,
 				    unsigned long action,
 				    void *data)
@@ -174,6 +180,10 @@ static int s2mpu16_notifier_handler(struct notifier_block *nb,
 	/* Read interrupt */
 	irq_cnt = S2MPU16_NUM_IRQ_PMIC_REGS;
 
+	ret = s2mpu16_enable_irq(s2mpu16, false);
+	if (ret)
+		return ret;
+
 	ret = s2mpu16_bulk_read(s2mpu16->pmic1, S2MPU16_PM1_INT1,
 				irq_cnt, &irq_reg[S2MPU16_PMIC_INT1]);
 	if (ret) {
@@ -182,6 +192,10 @@ static int s2mpu16_notifier_handler(struct notifier_block *nb,
 
 		return IRQ_HANDLED;
 	}
+
+	ret = s2mpu16_enable_irq(s2mpu16, true);
+	if (ret)
+		return ret;
 
 	queue_delayed_work(s2mpu16->irq_wqueue, &s2mpu16->irq_work, 0);
 

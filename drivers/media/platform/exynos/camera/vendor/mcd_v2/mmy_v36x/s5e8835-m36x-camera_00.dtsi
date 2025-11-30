@@ -52,6 +52,48 @@
 				mcu {
 					product_name = <2>; /* INTERNAL */
 				};
+
+				power_seq {
+					scenario_normal_on {
+						20 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 1 0 1000>; gpio = <&gpm12 0 0x1>; share = <SRT_ACQUIRE SHARED_PIN1 1>; };
+						30 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 1 1000>; share = <SRT_ACQUIRE SHARED_PIN0 1>; };
+					};
+
+					scenario_normal_off {
+						90 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 0 0>; share = <SRT_RELEASE SHARED_PIN0 0>; };
+						100 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 0 1000>; gpio = <&gpm12 0 0x1>; share = <SRT_RELEASE SHARED_PIN1 0>; };
+					};
+
+					scenario_vision_on {
+						20 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 1 0 1000>; gpio = <&gpm12 0 0x1>; share = <SRT_ACQUIRE SHARED_PIN1 1>; };
+						30 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 1 1000>; share = <SRT_ACQUIRE SHARED_PIN0 1>; };
+					};
+
+					scenario_vision_off {
+						90 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 0 0>; share = <SRT_RELEASE SHARED_PIN0 0>; };
+						100 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 0 1000>; gpio = <&gpm12 0 0x1>;  share = <SRT_RELEASE SHARED_PIN1 0>; };
+					};
+
+					scenario_ois_factory_on {
+						20 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 1 0 1000>; gpio = <&gpm12 0 0x1>; share = <SRT_ACQUIRE SHARED_PIN1 1>; };
+						30 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 1 1000>; share = <SRT_ACQUIRE SHARED_PIN0 1>; };
+					};
+
+					scenario_ois_factory_off {
+						40 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 0 0>; share = <SRT_RELEASE SHARED_PIN0 0>; };
+						50 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 0 1000>; gpio = <&gpm12 0 0x1>; share = <SRT_RELEASE SHARED_PIN1 0>; };
+					};
+
+					scenario_read_rom_on {
+						10 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 1 0 1000>; gpio = <&gpm12 0 0x1>; share = <SRT_ACQUIRE SHARED_PIN1 1>; };
+						20 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 1 1000>; share = <SRT_ACQUIRE SHARED_PIN0 1>; };
+					};
+
+					scenario_read_rom_off {
+						30 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 0 0>; share = <SRT_RELEASE SHARED_PIN0 0>; };
+						40 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 0 1000>; gpio = <&gpm12 0 0x1>; share = <SRT_RELEASE SHARED_PIN1 0>; };
+					};
+				};
 			};
 
 			/* FRONT CAMERA */
@@ -67,6 +109,38 @@
 				id = <1>; /* is_sensor id */
 				mclk_ch = <2>;
 				sensor_i2c_ch = <1>; /* SENSOR_CONTROL_I2C1 */
+
+				power_seq {
+					scenario_normal_on {
+						20 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 1 0 1000>; gpio = <&gpm12 0 0x1>; share = <SRT_ACQUIRE SHARED_PIN1 1>; };
+						40 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 1 1000>; share = <SRT_ACQUIRE SHARED_PIN0 1>; };
+					};
+
+					scenario_normal_off {
+						70 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 0 500>; share = <SRT_RELEASE SHARED_PIN0 0>; };
+						90 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 0 1000>; gpio = <&gpm12 0 0x1>; share = <SRT_RELEASE SHARED_PIN1 0>; };
+					};
+
+					scenario_vision_on {
+						20 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 1 0 1000>; gpio = <&gpm12 0 0x1>; share = <SRT_ACQUIRE SHARED_PIN1 1>; };
+						40 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 1 1000>; share = <SRT_ACQUIRE SHARED_PIN0 1>; };
+					};
+
+					scenario_vision_off {
+						70 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 0 500>; share = <SRT_RELEASE SHARED_PIN0 0>; };
+						90 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 0 1000>; gpio = <&gpm12 0 0x1>; share = <SRT_RELEASE SHARED_PIN1 0>; };
+					};
+
+					scenario_read_rom_on {
+						10 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 1 0 1000>; gpio = <&gpm12 0 0x1>; share = <SRT_ACQUIRE SHARED_PIN1 1>; };
+						20 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 1 1000>; share = <SRT_ACQUIRE SHARED_PIN0 1>; };
+					};
+
+					scenario_read_rom_off {
+						20 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 0 0>; share = <SRT_RELEASE SHARED_PIN0 0>; };
+						30 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 0 1000>; gpio = <&gpm12 0 0x1>; share = <SRT_RELEASE SHARED_PIN1 0>; };
+					};
+				};
 			};
 
 			/* UW CAMERA */
@@ -82,6 +156,39 @@
 				id = <4>; /* is_sensor id */
 				mclk_ch = <2>;
 				sensor_i2c_ch = <2>; /* SENSOR_CONTROL_I2C2 */
+
+				power_seq {
+					scenario_normal_on {
+						20 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 1 0 2800000>; gpio = <&gpm12 0 0x1>; share = <SRT_ACQUIRE SHARED_PIN1 1>; };
+						40 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 1 0>; share = <SRT_ACQUIRE SHARED_PIN0 1>; };
+					};
+
+					scenario_normal_off {
+						70 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 0 500>; share = <SRT_RELEASE SHARED_PIN0 0>; };
+						90 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 0 0>; gpio = <&gpm12 0 0x1>; share = <SRT_RELEASE SHARED_PIN1 0>; };
+					};
+
+					scenario_vision_on {
+						20 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 1 0 2800000>; gpio = <&gpm12 0 0x1>; share = <SRT_ACQUIRE SHARED_PIN1 1>; };
+						40 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 1 0>; share = <SRT_ACQUIRE SHARED_PIN0 1>; };
+					};
+
+					scenario_vision_off {
+						70 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 0 500>; share = <SRT_RELEASE SHARED_PIN0 0>; };
+						90 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 0 0>; gpio = <&gpm12 0 0x1>; share = <SRT_RELEASE SHARED_PIN1 0>; };
+					};
+
+					scenario_read_rom_on {
+						20 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 1 0 2800000>; gpio = <&gpm12 0 0x1>; share = <SRT_ACQUIRE SHARED_PIN1 1>; };
+						40 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 1 0>; share = <SRT_ACQUIRE SHARED_PIN0 1>; };
+					};
+
+					scenario_read_rom_off {
+						70 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 0 500>; share = <SRT_RELEASE SHARED_PIN0 0>; };
+						90 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 0 0>; gpio = <&gpm12 0 0x1>; share = <SRT_RELEASE SHARED_PIN1 0>; };
+					};
+
+				};
 			};
 
 			/* MACRO CAMERA */
@@ -100,6 +207,38 @@
 
 				flash {
 					product_name = <19>; /* S2MF301 */
+				};
+
+				power_seq {
+					scenario_normal_on {
+						20 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 1 1000>; share = <SRT_ACQUIRE SHARED_PIN0 1>; };
+						40 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 1 0>; gpio = <&gpm12 0 0x1>; share = <SRT_ACQUIRE SHARED_PIN1 1>; };
+					};
+
+					scenario_normal_off {
+						30 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 0 500>; share = <SRT_RELEASE SHARED_PIN0 0>; };
+						50 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 0 0>; gpio = <&gpm12 0 0x1>; share = <SRT_RELEASE SHARED_PIN1 0>; };
+					};
+
+					scenario_vision_on {
+						20 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 1 1000>; share = <SRT_ACQUIRE SHARED_PIN0 1>; };
+						40 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 1 0>; gpio = <&gpm12 0 0x1>; share = <SRT_ACQUIRE SHARED_PIN1 1>; };
+					};
+
+					scenario_vision_off {
+						30 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 0 500>; share = <SRT_RELEASE SHARED_PIN0 0>; };
+						50 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 0 0>; gpio = <&gpm12 0 0x1>; share = <SRT_RELEASE SHARED_PIN1 0>; };
+					};
+
+					scenario_read_rom_on {
+						10 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 1 1000>; share = <SRT_ACQUIRE SHARED_PIN0 1>; };
+						20 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 1 0>; gpio = <&gpm12 0 0x1>; share = <SRT_ACQUIRE SHARED_PIN1 1>; };
+					};
+
+					scenario_read_rom_off {
+						20 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 0 500>; share = <SRT_RELEASE SHARED_PIN0 0>; };
+						30 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 0 0>; gpio = <&gpm12 0 0x1>; share = <SRT_RELEASE SHARED_PIN1 0>; };
+					};
 				};
 			};
 
@@ -808,7 +947,7 @@
 		is_vendor_sensor_count = <4>;
 		max_supported_camera = <4>;
 		supported_cameraId = <0 1 58 60>;
-		ois_gyro_list = <0x04 0x00 0x05>;
+		ois_gyro_list = <0x04 0x00 0x00>;
 
 		/*
 		* Wide(0)

@@ -493,3 +493,15 @@ int __is_mcu_hw_peri2_dump(void __iomem *base)
 	info_mcu("PERI2 SFR DUMP --- end (v1.1.0)\n");
 	return 0;
 }
+
+void __is_mcu_hw_show_peri_status(void __iomem *base)
+{
+	u32 i = 0;
+	u32 reg_value = 0;
+
+	for (i = R_OIS_PERI_CON_CTRL; i <= R_OIS_PERI2_PUDPDN_CTRL; i++) {
+		reg_value = is_mcu_get_reg(base, i);
+		info_mcu("reg:[%s][0x%04X], reg_value(R):[0x%08X]\n",
+			ois_mcu_regs[i].reg_name, ois_mcu_regs[i].sfr_offset, reg_value);
+	}
+}

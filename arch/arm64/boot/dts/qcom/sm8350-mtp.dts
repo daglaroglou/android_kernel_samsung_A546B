@@ -23,7 +23,7 @@
 
 		sleep-clk {
 			compatible = "fixed-clock";
-			clock-frequency = <0x7d00>;
+			clock-frequency = <0x7ffc>;
 			#clock-cells = <0x00>;
 			phandle = <0x10>;
 		};
@@ -671,7 +671,7 @@
 
 		remoteproc@4080000 {
 			compatible = "qcom,sm8350-mpss-pas";
-			reg = <0x00 0x4080000 0x00 0x4040>;
+			reg = <0x00 0x4080000 0x00 0x10000>;
 			interrupts-extended = <0x01 0x00 0x108 0x04 0x21 0x00 0x01 0x21 0x01 0x01 0x21 0x02 0x01 0x21 0x03 0x01 0x21 0x07 0x01>;
 			interrupt-names = "wdog\0fatal\0ready\0handover\0stop-ack\0shutdown-ack";
 			clocks = <0x0f 0x00>;
@@ -1426,7 +1426,6 @@
 			reg = <0x00 0x1d87000 0x00 0x1c4>;
 			#address-cells = <0x02>;
 			#size-cells = <0x02>;
-			#clock-cells = <0x01>;
 			ranges;
 			clock-names = "ref\0ref_aux";
 			clocks = <0x0f 0x00 0x14 0xa1>;
@@ -1529,7 +1528,6 @@
 			reg = <0x00 0x88e9000 0x00 0x200 0x00 0x88e8000 0x00 0x20>;
 			reg-names = "reg-base\0dp_com";
 			status = "okay";
-			#clock-cells = <0x01>;
 			#address-cells = <0x02>;
 			#size-cells = <0x02>;
 			ranges;
@@ -1556,7 +1554,6 @@
 			compatible = "qcom,sm8350-qmp-usb3-uni-phy";
 			reg = <0x00 0x88eb000 0x00 0x200>;
 			status = "okay";
-			#clock-cells = <0x01>;
 			#address-cells = <0x02>;
 			#size-cells = <0x02>;
 			ranges;

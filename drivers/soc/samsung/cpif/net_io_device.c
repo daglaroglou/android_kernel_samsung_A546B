@@ -57,7 +57,15 @@ static int vnet_open(struct net_device *ndev)
 	list_add(&iod->node_ndev, &iod->msd->activated_ndev_list);
 	spin_unlock_irqrestore(&msd->active_list_lock, flags);
 
+	ld = get_current_link(iod);
 	netif_start_queue(ndev);
+
+	spin_lock_irqsave(&ld->netif_lock, flags);
+	if (atomic_read(&ld->netif_stopped)) {
+		mif_info("Currently netif stopped, stop normal queue\n");
+		netif_stop_subqueue(ndev, 0);
+	}
+	spin_unlock_irqrestore(&ld->netif_lock, flags);
 
 	mif_info("%s (opened %d) by %s\n",
 		iod->name, atomic_read(&iod->opened), current->comm);
@@ -314,6 +322,14 @@ static inline bool is_tcp_ack(struct sk_buff *skb)
 	return false;
 }
 
+static inline bool is_priority_packet(struct sk_buff *skb)
+{
+	if (skb->protocol == htons(ETH_P_IP) || skb->protocol == htons(ETH_P_IPV6))
+		return skb->queue_mapping == 1;
+
+	return false;
+}
+
 #if IS_ENABLED(CONFIG_MODEM_IF_QOS)
 static u16 vnet_select_queue(struct net_device *dev, struct sk_buff *skb,
 		struct net_device *sb_dev)
@@ -326,6 +342,9 @@ static u16 vnet_select_queue(struct net_device *dev, struct sk_buff *skb,
 		return 0;
 
 	if (is_tcp_ack(skb))
+		return 1;
+
+	if (is_priority_packet(skb))
 		return 1;
 
 #if IS_ENABLED(CONFIG_MODEM_IF_LEGACY_QOS)

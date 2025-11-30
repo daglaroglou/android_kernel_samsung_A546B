@@ -4,11 +4,14 @@
 #include <linux/proc_fs.h>
 #include <linux/highmem.h>
 #include <linux/uh.h>
+#include <linux/mutex.h>
 
 unsigned long uh_log_paddr;
 unsigned long uh_log_size;
 
-ssize_t	uh_log_read(struct file *filep, char __user *buf, size_t size, loff_t *offset)
+static DEFINE_MUTEX(uh_mutex);
+
+static ssize_t uh_log_read(struct file *filep, char __user *buf, size_t size, loff_t *offset)
 {
 	static size_t log_buf_size;
 	unsigned long *log_addr = 0;
@@ -18,22 +21,32 @@ ssize_t	uh_log_read(struct file *filep, char __user *buf, size_t size, loff_t *o
 	else
 		return -EINVAL;
 
+	if (!mutex_trylock(&uh_mutex)) {
+		pr_err("uh_log: Busy.\n");
+		return -EBUSY;
+	}
+
 	if (!*offset) {
 		log_buf_size = 0;
 		while (log_buf_size < uh_log_size && ((char *)log_addr)[log_buf_size] != 0)
 			log_buf_size++;
 	}
 
-	if (*offset >= log_buf_size)
+	if (*offset >= log_buf_size) {
+		mutex_unlock(&uh_mutex);
 		return 0;
+	}
 
 	if (*offset + size > log_buf_size)
 		size = log_buf_size - *offset;
 
-	if (copy_to_user(buf, (const char *)log_addr + (*offset), size))
+	if (copy_to_user(buf, (const char *)log_addr + (*offset), size)) {
+		mutex_unlock(&uh_mutex);
 		return -EFAULT;
+	}
 
 	*offset += size;
+	mutex_unlock(&uh_mutex);
 	return size;
 }
 
@@ -44,6 +57,7 @@ static const struct proc_ops uh_proc_ops = {
 static int __init uh_log_init(void)
 {
 	struct proc_dir_entry *entry;
+	mutex_init(&uh_mutex);
 
 	entry = proc_create("uh_log", 0644, NULL, &uh_proc_ops);
 	if (!entry) {
@@ -58,6 +72,7 @@ static int __init uh_log_init(void)
 
 static void __exit uh_log_exit(void)
 {
+	mutex_destroy(&uh_mutex);
 	remove_proc_entry("uh_log", NULL);
 }
 

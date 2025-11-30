@@ -27,6 +27,7 @@ struct reg_database {
 	struct regdb_file_freq_range *freq_ranges;
 	struct regdb_file_reg_rules_collection *rules_collection;
 	struct regdb_file_reg_country *country;
+	int current_cc_index;
 };
 
 struct regdb_file_freq_range {

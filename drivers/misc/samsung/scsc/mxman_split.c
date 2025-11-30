@@ -448,7 +448,8 @@ static ssize_t sysfs_store_wlbt_dcxo_caldata(struct kobject *kobj, struct kobj_a
 /* Set wlbt_dcxo_caldata with the default value of the specific path for vendor */
 static void mxman_set_default_dcxo_caldata(struct mxman *mxman)
 {
-	char *default_dcxo_path = "../etc/wifi/wlbt_dcxo_caldata";
+	char *default_dcxo_path = "wifi/wlbt_dcxo_caldata";
+	char *legacy_dcxo_path = "../etc/wifi/wlbt_dcxo_caldata";
 	const struct firmware *e = NULL;
 	int ret;
 	struct scsc_mif_abs *mif_abs;
@@ -461,9 +462,14 @@ static void mxman_set_default_dcxo_caldata(struct mxman *mxman)
 
 	ret = mx140_request_file(mxman->mx, default_dcxo_path, &e);
 	if (ret) {
-		SCSC_TAG_WARNING(MXMAN, "Error Loading %s\n", default_dcxo_path);
-		goto exit;
-	} else if (!e) {
+		SCSC_TAG_INFO(MXMAN, "Error Loading %s, try legacy directory\n", default_dcxo_path);
+		ret = mx140_request_file(mxman->mx, legacy_dcxo_path, &e);
+		if (ret) {
+			SCSC_TAG_WARNING(MXMAN, "Error Loading %s\n", legacy_dcxo_path);
+			goto exit;
+		}
+	}
+	if (!e) {
 		SCSC_TAG_WARNING(MXMAN, "mx140_request_file() returned success, but firmware was null.\n");
 		goto exit;
 	}

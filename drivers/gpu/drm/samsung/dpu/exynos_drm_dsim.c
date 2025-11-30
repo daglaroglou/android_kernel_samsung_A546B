@@ -905,6 +905,10 @@ static int dsim_parse_dt(struct dsim_device *dsim)
 				 &dsim->config.drive_strength))
 		dsim->config.drive_strength = UINT_MAX;
 
+	if (of_property_read_u32(np, "dphy-clk-trail",
+				&dsim->config.clk_trail))
+		dsim->config.clk_trail = UINT_MAX;
+
 	dsim->pll_params = dsim_of_get_clock_mode(dsim);
 
 	ret = of_property_read_u32(np, "phy-type", &val);

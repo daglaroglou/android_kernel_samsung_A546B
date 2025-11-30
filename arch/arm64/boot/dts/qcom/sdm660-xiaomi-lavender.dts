@@ -1180,6 +1180,7 @@
 				interrupts = <0x00 0x83 0x04>;
 				snps,dis_u2_susphy_quirk;
 				snps,dis_enblslpm_quirk;
+				snps,parkmode-disable-ss-quirk;
 				maximum-speed = "high-speed";
 				phys = <0x27>;
 				phy-names = "usb2-phy";

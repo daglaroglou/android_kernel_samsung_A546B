@@ -464,7 +464,7 @@ static int hclge_ptp_create_clock(struct hclge_dev *hdev)
 	}
 
 	spin_lock_init(&ptp->lock);
-	ptp->io_base = hdev->hw.io_base + HCLGE_PTP_REG_OFFSET;
+	ptp->io_base = hdev->hw.hw.io_base + HCLGE_PTP_REG_OFFSET;
 	ptp->ts_cfg.rx_filter = HWTSTAMP_FILTER_NONE;
 	ptp->ts_cfg.tx_type = HWTSTAMP_TX_OFF;
 	hdev->ptp = ptp;
@@ -496,7 +496,7 @@ int hclge_ptp_init(struct hclge_dev *hdev)
 
 		ret = hclge_ptp_get_cycle(hdev);
 		if (ret)
-			return ret;
+			goto out;
 	}
 
 	ret = hclge_ptp_int_en(hdev, true);

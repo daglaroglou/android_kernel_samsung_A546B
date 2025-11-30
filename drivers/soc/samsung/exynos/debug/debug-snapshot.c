@@ -914,12 +914,16 @@ static int dbg_snapshot_dss_kmsg_open(struct inode *inode, struct file *file)
 	if (!item)
 		return -EFAULT;
 
+	mutex_lock(&dss_kmsg_mutex);
+
 	dss_kmsg_size = item->entry.size;
 	dss_kmsg = vzalloc(dss_kmsg_size);
-	if (!dss_kmsg)
-		return -ENOMEM;
 
-	mutex_lock(&dss_kmsg_mutex);
+	if (!dss_kmsg) {
+		mutex_unlock(&dss_kmsg_mutex);
+		return -ENOMEM;
+	}
+
 
 	offset = dbg_snapshot_get_val_offset(DSS_OFFSET_LAST_LOGBUF) - item->entry.paddr;
 	memcpy(dss_kmsg, (void *)item->entry.vaddr + offset, dss_kmsg_size - offset);

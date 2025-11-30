@@ -61,5 +61,8 @@ int snprintf_disp_panic_decon_id(char *buf, size_t size, unsigned int decon_id);
 int snprintf_disp_panic_reason(char *buf, size_t size, enum disp_panic_reason reason);
 int snprintf_disp_panic_recovery_count(char *buf, size_t size, unsigned int recovery_count);
 int snprintf_disp_panic_disp_clock(char *buf, size_t size, u64 disp_clock);
+bool mcd_drm_decon_is_recovery_supported(struct decon_device *decon);
+bool mcd_drm_decon_is_recovery_begin(struct decon_device *decon);
+bool mcd_drm_decon_is_recovery_running(struct decon_device *decon);
 bool customer_condition_check(const struct drm_crtc *crtc);
 #endif //__MCD_DRM_HELPER_H__

@@ -366,7 +366,7 @@ void mfc_dump_state(struct mfc_dev *dev)
 
 	for (i = 0; i < MFC_NUM_CONTEXTS; i++) {
 		if (dev->ctx[i]) {
-			mfc_dev_err("- ctx[%d] %s %s, %s, %s, size: %dx%d@%ldfps(tmu: %dfps, op: %ldfps), crop: %d %d %d %d\n",
+			mfc_dev_err("- ctx[%d] %s %s, %s, %s, size: %dx%d@%ldfps(tmu: %dfps, op: %ldfps), crop: %d %d %d %d is_sbwc:%d sbwc_enabled:%d\n",
 				dev->ctx[i]->num,
 				dev->ctx[i]->type == MFCINST_DECODER ? "DEC" : "ENC",
 				dev->ctx[i]->is_drm ? "Secure" : "Normal",
@@ -377,7 +377,7 @@ void mfc_dump_state(struct mfc_dev *dev)
 				dev->tmu_fps,
 				dev->ctx[i]->operating_framerate,
 				dev->ctx[i]->crop_width, dev->ctx[i]->crop_height,
-				dev->ctx[i]->crop_left, dev->ctx[i]->crop_top);
+				dev->ctx[i]->crop_left, dev->ctx[i]->crop_top, dev->ctx[i]->is_sbwc, dev->ctx[i]->sbwc_disabled);
 			mfc_dev_err("	main core: %d, op_mode: %d(stream: %d), idle_mode: %d, wait_state %d, prio %d, rt %d, queue_cnt(src:%d, dst:%d, ref:%d, qsrc:%d, qdst:%d), deferred: %d\n",
 				dev->ctx[i]->op_core_num[MFC_CORE_MAIN],
 				dev->ctx[i]->op_mode, dev->ctx[i]->stream_op_mode, dev->ctx[i]->idle_mode,
@@ -609,9 +609,10 @@ void __mfc_dump_buffer_info(struct mfc_core *core)
 			core_ctx->codec_buf.daddr + core_ctx->codec_buf.size,
 			ctx->mv_buf.daddr, ctx->mv_buf.daddr + ctx->mv_buf.size);
 
-	if (core->nal_q_handle && (core->nal_q_handle->nal_q_state == NAL_Q_STATE_STARTED)) {
+	if (core->nal_q_handle && (core->nal_q_handle->nal_q_state >= NAL_Q_STATE_STARTED)) {
 		__mfc_dump_nal_q_buffer_info(core, curr_ctx);
-		return;
+		if (core->nal_q_handle->nal_q_state != NAL_Q_STATE_STOPPED)
+			return;
 	}
 
 	if (ctx->type == MFCINST_DECODER) {

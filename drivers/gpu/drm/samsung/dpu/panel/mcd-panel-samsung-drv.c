@@ -32,6 +32,7 @@
 #include <exynos_drm_dsim.h>
 #include <exynos_drm_tui.h>
 #include <mcd_drm_dsim.h>
+#include <mcd_drm_helper.h>
 #include "../exynos_drm_dqe.h"
 #include "panel-samsung-drv.h"
 #include "mcd-panel-samsung-helper.h"
@@ -676,6 +677,42 @@ enum exynos_reset_pos exynos_panel_get_reset_position(struct exynos_panel *ctx)
 	return pdesc->reset_pos;
 }
 
+static struct decon_device *get_decon_from_exynos_panel(struct exynos_panel *ctx)
+{
+	struct drm_device *drm_dev = NULL;
+	struct drm_crtc *crtc;
+	struct exynos_drm_crtc *exynos_crtc = NULL;
+	struct decon_device *decon = NULL;
+
+	if (!ctx)
+		return NULL;
+
+	drm_dev = ctx->exynos_connector.base.dev;
+	if (!drm_dev) {
+		panel_info(ctx, "drm_dev has null\n");
+		return NULL;
+	}
+
+	drm_for_each_crtc(crtc, drm_dev)
+		if (to_exynos_crtc(crtc)->possible_type & EXYNOS_DISPLAY_TYPE_DSI) {
+			exynos_crtc = to_exynos_crtc(crtc);
+			break;
+		}
+
+	if (!exynos_crtc) {
+		panel_info(ctx, "exynos_crtc has null\n");
+		return NULL;
+	}
+
+	decon = exynos_crtc->ctx;
+	if (!decon) {
+		panel_info(ctx, "decon has null\n");
+		return NULL;
+	}
+
+	return decon;
+}
+
 static void exynos_panel_enable(struct drm_bridge *bridge)
 {
 	struct exynos_panel *ctx = bridge_to_exynos_panel(bridge);
@@ -683,8 +720,15 @@ static void exynos_panel_enable(struct drm_bridge *bridge)
 	struct exynos_drm_connector_state *exynos_conn_state =
 		to_exynos_connector_state(exynos_conn->base.state);
 	const struct drm_display_mode *current_mode = &ctx->current_mode->mode;
+	struct decon_device *decon;
 
-	if (is_bypass_panel(ctx)) {
+	decon = get_decon_from_exynos_panel(ctx);
+	if (!decon) {
+		panel_info(ctx, "decon has null\n");
+		return;
+	}
+
+	if (is_bypass_panel(ctx) && !mcd_drm_decon_is_recovery_begin(decon)) {
 		panel_info(ctx, "bypass\n");
 		return;
 	}
@@ -708,13 +752,20 @@ static void exynos_panel_enable(struct drm_bridge *bridge)
 static void exynos_panel_pre_enable(struct drm_bridge *bridge)
 {
 	struct exynos_panel *ctx = bridge_to_exynos_panel(bridge);
+	struct decon_device *decon;
+
+	decon = get_decon_from_exynos_panel(ctx);
+	if (!decon) {
+		panel_info(ctx, "decon has null\n");
+		return;
+	}
 
 	if (ctx->enabled) {
 		panel_info(ctx, "panel is already initialized\n");
 		return;
 	}
 
-	if (is_bypass_panel(ctx)) {
+	if (is_bypass_panel(ctx) && !mcd_drm_decon_is_recovery_begin(decon)) {
 		panel_info(ctx, "bypass\n");
 		return;
 	}
@@ -727,8 +778,15 @@ static void exynos_panel_pre_enable(struct drm_bridge *bridge)
 static void exynos_panel_disable(struct drm_bridge *bridge)
 {
 	struct exynos_panel *ctx = bridge_to_exynos_panel(bridge);
+	struct decon_device *decon;
 
-	if (is_bypass_panel(ctx)) {
+	decon = get_decon_from_exynos_panel(ctx);
+	if (!decon) {
+		panel_info(ctx, "decon has null\n");
+		return;
+	}
+
+	if (is_bypass_panel(ctx) && !mcd_drm_decon_is_recovery_begin(decon)) {
 		panel_info(ctx, "bypass\n");
 		return;
 	}
@@ -739,8 +797,15 @@ static void exynos_panel_disable(struct drm_bridge *bridge)
 static void exynos_panel_post_disable(struct drm_bridge *bridge)
 {
 	struct exynos_panel *ctx = bridge_to_exynos_panel(bridge);
+	struct decon_device *decon;
 
-	if (is_bypass_panel(ctx)) {
+	decon = get_decon_from_exynos_panel(ctx);
+	if (!decon) {
+		panel_info(ctx, "decon has null\n");
+		return;
+	}
+
+	if (is_bypass_panel(ctx) && !mcd_drm_decon_is_recovery_begin(decon)) {
 		panel_info(ctx, "bypass\n");
 		return;
 	}
@@ -750,6 +815,11 @@ static void exynos_panel_post_disable(struct drm_bridge *bridge)
 	up_write(&ctx->panel_drm_state_lock);
 
 	drm_panel_unprepare(&ctx->panel);
+	if (is_bypass_panel(ctx) && mcd_drm_decon_is_recovery_begin(decon)) {
+		bypass_display = 0;
+		return;
+	}
+
 }
 
 static void exynos_panel_update_rcd(struct exynos_panel *ctx,
@@ -2375,14 +2445,68 @@ __visible_for_testing int mcd_drm_emergency_off(void *_ctx)
 
 	if (!crtc_ops->emergency_off) {
 		pr_err("%s: emergency_off is null\n", __func__);
-		return -EINVAL;
+		return -ENOENT;
 	}
-
-	if (exynos_crtc->ops->emergency_off)
-		exynos_crtc->ops->emergency_off(exynos_crtc);
+	crtc_ops->emergency_off(exynos_crtc);
 
 	return 0;
 }
+
+__visible_for_testing int mcd_drm_trigger_recovery(void *_ctx)
+{
+	struct exynos_panel *ctx = (struct exynos_panel *)_ctx;
+	struct mipi_dsi_device *dsi;
+	struct dsim_device *dsim;
+	const struct drm_crtc *crtc;
+	struct exynos_drm_crtc *exynos_crtc;
+	struct decon_device *decon;
+
+	if (!ctx || !ctx->dev) {
+		pr_err("%s: invalid ctx\n", __func__);
+		return -EINVAL;
+	}
+
+	dsi = to_mipi_dsi_device(ctx->dev);
+	if (!dsi) {
+		pr_err("%s: invalid dsi\n", __func__);
+		return -EINVAL;
+	}
+
+	dsim = container_of(dsi->host, struct dsim_device, dsi_host);
+	if (!dsim) {
+		pr_err("%s: invalid dsi\n", __func__);
+		return -EINVAL;
+	}
+
+	crtc = dsim->encoder.base.crtc;
+	if (!crtc) {
+		pr_err("%s: invalid crtc\n", __func__);
+		return -EINVAL;
+	}
+
+	exynos_crtc = to_exynos_crtc(crtc);
+	decon = exynos_crtc->ctx;
+	if (!decon) {
+		pr_err("%s: invalid decon\n", __func__);
+		return -ENODEV;
+	}
+
+	if (!mcd_drm_decon_is_recovery_supported(decon)) {
+		pr_err("%s: recovery not supported\n", __func__);
+		return -ENOENT;
+	}
+
+	if (mcd_drm_decon_is_recovery_begin(decon)) {
+		pr_info("%s: is skipped(recovery started)\n", __func__);
+		return -EBUSY;
+	}
+
+	decon_trigger_recovery(exynos_crtc, "mcd_uevent");
+	bypass_display = 1;
+
+	return 0;
+}
+
 
 #if defined(CONFIG_USDM_PANEL_FREQ_HOP)
 static int mcd_drm_panel_set_osc(struct exynos_panel *ctx, u32 frequency)
@@ -2507,6 +2631,7 @@ struct panel_adapter_funcs mcd_panel_adapter_funcs = {
 #if defined(CONFIG_USDM_PANEL_FREQ_HOP)
 	.set_freq_hop = mcd_drm_set_freq_hop,
 #endif
+	.trigger_recovery = mcd_drm_trigger_recovery,
 };
 
 static const struct drm_panel_funcs mcd_drm_panel_funcs = {

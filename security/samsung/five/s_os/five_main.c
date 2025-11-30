@@ -550,9 +550,6 @@ static void process_measurement(const struct processing_event_list *params)
 	file_verification_result_deinit(&file_result);
 }
 
-#define MFD_NAME_PREFIX "memfd:"
-#define MFD_NAME_PREFIX_LEN (sizeof(MFD_NAME_PREFIX) - 1)
-
 static bool is_memfd_file(struct file *file)
 {
 	struct inode *inode;
@@ -564,10 +561,7 @@ static bool is_memfd_file(struct file *file)
 	memfd_inode = file_inode(memfd_file);
 	inode = file_inode(file);
 	if (inode && memfd_inode && inode->i_sb == memfd_inode->i_sb)
-		if (file->f_path.dentry &&
-			!strncmp(file->f_path.dentry->d_iname, MFD_NAME_PREFIX,
-							MFD_NAME_PREFIX_LEN))
-			return true;
+		return true;
 
 	return false;
 }

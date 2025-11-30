@@ -1357,9 +1357,11 @@ static int __mfc_core_nal_q_run_in_buf_dec(struct mfc_core *core, struct mfc_cor
 	if (ctx->is_sbwc) {
 		mfc_check_sbwc_per_frame(ctx);
 
-		if (ctx->sbwc_disabled)
+		if (ctx->sbwc_disabled) {
 			pInStr->NalStartOptions |=
 				(1 << MFC_REG_D_NAL_START_OPT_DIS_COMPRESSOR_SHIFT);
+			MFC_TRACE_CTX("[NALQ] Control compressor: sbwc disabled");
+		}
 	}
 
 	/* Try to use the non-referenced DPB on dst-queue */
@@ -1409,6 +1411,9 @@ static int __mfc_core_nal_q_run_in_buf_dec(struct mfc_core *core, struct mfc_cor
 	mfc_debug(2, "[NALQ][STREAM] strm_size, %#x,%d, offset %d, need_buf_size, %zu, buf_size, %zu\n",
 			strm_size, strm_size, offset, need_cpb_buf_size, buf_size);
 
+	MFC_TRACE_CTX("[NALQ][STREAM]index:%d(%d),0x%08llx:%d strm_size:%d,need:%zu,buf_size:%zu,opt:%x\n",
+				  src_index, src_mb->src_index, buf_addr, offset, strm_size,
+				  need_cpb_buf_size, buf_size,pInStr->NalStartOptions);
 	if (strm_size == 0)
 		mfc_info("[NALQ] stream size is 0\n");
 
@@ -1435,11 +1440,12 @@ static int __mfc_core_nal_q_run_in_buf_dec(struct mfc_core *core, struct mfc_cor
 					dst_mb->vb.vb2_buf.index, dst_mb->dpb_index,
 					i, dst_mb->addr[0][i], dst_mb->vb.vb2_buf.planes[0].m.fd,
 					pInStr->FrameSize[i]);
+			MFC_TRACE_CTX("[NALQ][BUFINFO][DPB]set dst index:[%d][%d],addr[%d]:0x%08llx,fd:%d,size:%d\n",
+					dst_mb->vb.vb2_buf.index, dst_mb->dpb_index,
+					i, dst_mb->addr[0][i], dst_mb->vb.vb2_buf.planes[0].m.fd,
+					pInStr->FrameSize[i]);
 		}
 
-		MFC_TRACE_CTX("Set dst[%d] fd: %d, %#llx / used %#lx\n",
-				dst_index, dst_mb->vb.vb2_buf.planes[0].m.fd,
-				dst_mb->addr[0][0], dec->dynamic_used);
 	} else {
 		raw = &ctx->internal_raw_buf;
 		dynamic_set = dec->dynamic_set;
@@ -3019,7 +3025,9 @@ static void __mfc_core_nal_q_update_avail_slot(struct mfc_core *core)
 	bit = ((unsigned long)(1) << (index % NAL_Q_IN_AVAIL_SLOT_SIZE));
 
 	if ((index == 0) || (index >= (NAL_Q_IN_AVAIL_SLOT_SIZE * 2))) {
-		mfc_core_err("[NALQ][LL] index range is wrong %d\n", index);
+		mfc_core_err("[NALQ][LL] index range is wrong index:%d(%#llx:%#llx)\n",
+			index, core->nal_q_handle->in_avail_slot[0],
+			core->nal_q_handle->in_avail_slot[1]);
 		call_dop(core, dump_and_stop_debug_mode, core);
 	} else if (core->nal_q_handle->in_avail_slot[slot] & bit) {
 		/* The number of execution for the same input */
@@ -3027,7 +3035,9 @@ static void __mfc_core_nal_q_update_avail_slot(struct mfc_core *core)
 		if (output_cmd_count) {
 			mfc_core_debug(2, "[NALQ][LL] same index %d is freed.\n", index);
 		} else {
-			mfc_core_err("[NALQ][LL] index is wrong (not used) %d\n", index);
+			mfc_core_err("[NALQ][LL] index is wrong (not used) index:%d(%#llx:%#llx)\n",
+			index, core->nal_q_handle->in_avail_slot[0],
+			core->nal_q_handle->in_avail_slot[1]);
 			call_dop(core, dump_and_stop_debug_mode, core);
 		}
 	} else {
@@ -3408,9 +3418,11 @@ int mfc_core_nal_q_enqueue_in_buf(struct mfc_core *core, struct mfc_core_ctx *co
 
 	spin_unlock_irqrestore(&nal_q_in_handle->nal_q_handle->lock, flags);
 
-	MFC_TRACE_CTX("NAL %s in: diff %d count %d exe %d\n",
+	MFC_TRACE_CTX("NAL %s in: diff %d count %d exe %d index:%d(%#llx:%#llx)\n",
 			ctx->type == MFCINST_ENCODER ? "ENC" : "DEC",
-			input_diff, input_count, input_exe_count);
+			input_diff, input_count, input_exe_count,
+			index, core->nal_q_handle->in_avail_slot[0],
+			core->nal_q_handle->in_avail_slot[1]);
 
 	mfc_debug_leave();
 

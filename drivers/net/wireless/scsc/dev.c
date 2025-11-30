@@ -441,6 +441,7 @@ struct slsi_dev *slsi_dev_attach(struct device *dev, struct scsc_mx *core, struc
 		sdev->device_config.last_custom_tx_pwr[i] = -1;
 	sdev->acs_channel_switched = false;
 	memset(&sdev->chip_info_mib, 0xFF, sizeof(struct slsi_chip_info_mib));
+	sdev->regdb.regdb_state = SLSI_REG_DB_NOT_SET;
 
 #ifdef CONFIG_SCSC_WLAN_WIFI_SHARING
 	sdev->num_5g_restricted_channels = 0;

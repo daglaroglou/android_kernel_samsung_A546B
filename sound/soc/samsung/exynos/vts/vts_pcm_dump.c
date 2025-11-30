@@ -80,6 +80,8 @@ static ssize_t vts_pcm_dump_file_read(struct file *file, char __user *data,
 
 	dev_dbg(dev, "%s(%#zx)\n", __func__, count);
 
+	mutex_lock(&info->lock);
+
 	do {
 		pointer = READ_ONCE(info->pointer);
 		end = (info->file_pointer <= pointer) ? pointer :
@@ -96,19 +98,24 @@ static ssize_t vts_pcm_dump_file_read(struct file *file, char __user *data,
 		if (!size) {
 			if (file->f_flags & O_NONBLOCK) {
 				dev_err(dev, "%d size is 0", info->id);
+				mutex_unlock(&info->lock);
 				return -EAGAIN;
 			}
 			ret = wait_event_interruptible(info->file_waitqueue,
 					pointer != READ_ONCE(info->pointer));
-			if (ret < 0)
+			if (ret < 0) {
+				mutex_unlock(&info->lock);
 				return ret;
+			}
 		}
 	} while (!size);
 
 	if (vts_data->running) {
 		if (copy_to_user(data,
-				info->buffer.area + info->file_pointer, size))
+				info->buffer.area + info->file_pointer, size)) {
+			mutex_unlock(&info->lock);
 			return -EFAULT;
+		}
 
 		info->file_pointer += size;
 		info->file_pointer %= info->buffer.bytes;
@@ -117,6 +124,8 @@ static ssize_t vts_pcm_dump_file_read(struct file *file, char __user *data,
 		info->file_pointer = 0;
 		info->pointer = 0;
 	}
+
+	mutex_unlock(&info->lock);
 	return size;
 }
 

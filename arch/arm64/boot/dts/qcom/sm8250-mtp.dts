@@ -67,7 +67,7 @@
 
 		sleep-clk {
 			compatible = "fixed-clock";
-			clock-frequency = <0x8000>;
+			clock-frequency = <0x7ffc>;
 			#clock-cells = <0x00>;
 			phandle = <0x1a>;
 		};
@@ -1611,6 +1611,7 @@
 			resets = <0x48 0x00>;
 			reset-names = "ufsphy";
 			status = "okay";
+			power-domains = <0x1b 0x04>;
 			vdda-phy-supply = <0x49>;
 			vdda-max-microamp = <0x16058>;
 			vdda-pll-supply = <0x4a>;

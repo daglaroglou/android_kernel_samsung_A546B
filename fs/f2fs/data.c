@@ -1161,7 +1161,8 @@ int f2fs_reserve_new_blocks(struct dnode_of_data *dn, blkcnt_t count)
 
 	if (unlikely(is_inode_flag_set(dn->inode, FI_NO_ALLOC)))
 		return -EPERM;
-	if (unlikely((err = inc_valid_block_count(sbi, dn->inode, &count))))
+	err = inc_valid_block_count(sbi, dn->inode, &count, true);
+	if (unlikely(err))
 		return err;
 
 	trace_f2fs_reserve_new_blocks(dn->inode, dn->nid,
@@ -1437,7 +1438,7 @@ static int __allocate_data_block(struct dnode_of_data *dn, int seg_type)
 	if (dn->data_blkaddr != NULL_ADDR)
 		goto alloc;
 
-	if (unlikely((err = inc_valid_block_count(sbi, dn->inode, &count))))
+	if (unlikely((err = inc_valid_block_count(sbi, dn->inode, &count, true))))
 		return err;
 
 alloc:
@@ -2434,7 +2435,7 @@ static int f2fs_mpage_readpages(struct inode *inode,
 
 #ifdef CONFIG_F2FS_FS_COMPRESSION
 		if (f2fs_compressed_file(inode)) {
-			/* there are remained comressed pages, submit them */
+			/* there are remained compressed pages, submit them */
 			if (!f2fs_cluster_can_merge_page(&cc, page->index)) {
 				ret = f2fs_read_multi_pages(&cc, &bio,
 							max_nr_pages,
@@ -2699,10 +2700,13 @@ int f2fs_do_write_data_page(struct f2fs_io_info *fio)
 	struct extent_info ei = {0, };
 	struct node_info ni;
 	bool ipu_force = false;
+	bool atomic_commit;
 	int err = 0;
 
 	/* Use COW inode to make dnode_of_data for atomic write */
-	if (f2fs_is_atomic_file(inode))
+	atomic_commit = f2fs_is_atomic_file(inode) &&
+				page_private_atomic(fio->page);
+	if (atomic_commit)
 		set_new_dnode(&dn, F2FS_I(inode)->cow_inode, NULL, NULL, 0);
 	else
 		set_new_dnode(&dn, inode, NULL, NULL, 0);
@@ -2814,6 +2818,9 @@ got_it:
 	set_inode_flag(inode, FI_APPEND_WRITE);
 	if (page->index == 0)
 		set_inode_flag(inode, FI_FIRST_BLOCK_WRITTEN);
+
+	if (atomic_commit)
+		clear_page_private_atomic(page);
 out_writepage:
 	f2fs_put_dnode(&dn);
 out:
@@ -2862,7 +2869,7 @@ int f2fs_write_single_data_page(struct page *page, int *submitted,
 
 	f2fs_cond_set_fua(&fio);
 
-	/* we should bypass data pages to proceed the kworkder jobs */
+	/* we should bypass data pages to proceed the kworker jobs */
 	if (unlikely(f2fs_cp_error(sbi))) {
 		mapping_set_error(page->mapping, -EIO);
 		/*
@@ -2983,7 +2990,7 @@ out:
 redirty_out:
 	redirty_page_for_writepage(wbc, page);
 	/*
-	 * pageout() in MM traslates EAGAIN, so calls handle_write_error()
+	 * pageout() in MM translates EAGAIN, so calls handle_write_error()
 	 * -> mapping_set_error() -> set_bit(AS_EIO, ...).
 	 * file_write_and_wait_range() will see EIO error, which is critical
 	 * to return value of fsync() followed by atomic_write failure to user.
@@ -3119,7 +3126,7 @@ static void do_ml_stream(struct f2fs_sb_info *sbi, struct inode *inode)
 }
 #endif
 /*
- * This function was copied from write_cche_pages from mm/page-writeback.c.
+ * This function was copied from write_cache_pages from mm/page-writeback.c.
  * The major change is making write step of cold data page separately from
  * warm/hot data page.
  */
@@ -3867,6 +3874,9 @@ static int f2fs_write_end(struct file *file,
 		goto unlock_out;
 
 	set_page_dirty(page);
+
+	if (f2fs_is_atomic_file(inode))
+		set_page_private_atomic(page);
 
 	if (pos + copied > i_size_read(inode) &&
 	    !f2fs_verity_in_progress(inode)) {

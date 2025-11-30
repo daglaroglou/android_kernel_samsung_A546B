@@ -552,9 +552,8 @@ static int io_dev_recv_net_skb_from_link_dev(struct io_device *iod,
 	if (unlikely(atomic_read(&iod->opened) <= 0)) {
 		struct modem_ctl *mc = iod->mc;
 
-		mif_err_limited("%s: %s<-%s: ERR! %s is not opened\n",
+		mif_err_limited("%s: %s<-%s: %s is not opened\n",
 				ld->name, iod->name, mc->name, iod->name);
-		return -ENODEV;
 	}
 
 	cpif_wake_lock_timeout(iod->ws, iod->waketime ?: msecs_to_jiffies(200));

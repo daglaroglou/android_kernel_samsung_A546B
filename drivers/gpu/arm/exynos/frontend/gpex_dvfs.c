@@ -33,6 +33,11 @@
 #include "gpu_dvfs_governor.h"
 #include "gpex_dvfs_internal.h"
 
+#if IS_ENABLED(CONFIG_MALI_DEBUG_KERNEL_SYSFS)
+#include <trace/events/power.h>
+#define CREATE_TRACE_POINTS
+#endif
+
 static struct dvfs_info dvfs;
 
 static int gpu_dvfs_handler_init(void);
@@ -119,6 +124,9 @@ static int kbase_platform_dvfs_event(u32 utilisation)
 		int clk = 0;
 		gpu_dvfs_calculate_env_data();
 		clk = gpu_dvfs_decide_next_freq(dvfs.env_data.utilization);
+#if IS_ENABLED(CONFIG_MALI_DEBUG_KERNEL_SYSFS)
+		trace_clock_set_rate("Gpu Utilization", dvfs.env_data.utilization, 0);
+#endif
 		gpex_clock_set(clk);
 	}
 	mutex_unlock(&dvfs.handler_lock);

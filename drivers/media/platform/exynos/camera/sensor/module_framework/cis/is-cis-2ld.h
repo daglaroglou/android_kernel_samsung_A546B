@@ -14,14 +14,6 @@
 
 #include "is-cis.h"
 
-#define SENSOR_2LD_MAX_WIDTH		(4032 + 0)
-#define SENSOR_2LD_MAX_HEIGHT		(3024 + 0)
-
-#define SENSOR_2LD_FINE_INTEGRATION_TIME_MIN                0x100
-#define SENSOR_2LD_FINE_INTEGRATION_TIME_MAX                0x100
-#define SENSOR_2LD_COARSE_INTEGRATION_TIME_MIN              0x6
-#define SENSOR_2LD_COARSE_INTEGRATION_TIME_MAX_MARGIN       0x24
-
 #define AEB_2LD_LUT0	0x0E10
 #define AEB_2LD_LUT1	0x0E1C
 #define AEB_2LD_LUT2	0x0E28
@@ -61,6 +53,8 @@ enum sensor_2ld_mode_enum {
 	/* MODE 3 PRO VIDEO */
 	SENSOR_2LD_4032X2268_120FPS = 15,
 	SENSOR_2LD_3328X1872_120FPS = 16,
+	/* MODE 3 SUB CROP */
+	SENSOR_2LD_2800X2100_30FPS = 17,
 	SENSOR_2LD_MODE_MAX,
 };
 
@@ -88,6 +82,8 @@ static bool sensor_2ld_support_wdr[] = {
 	/* MODE 3 PRO VIDEO */
 	true, //SENSOR_2LD_4032X2268_120FPS = 15,
 	true, //SENSOR_2LD_3328X1872_120FPS = 16,
+	/* MODE 3 SUB CROP */
+	true, //SENSOR_2LD_2800X2100_30FPS = 17,
 };
 
 static bool sensor_2ld_support_aeb[] = {
@@ -114,6 +110,8 @@ static bool sensor_2ld_support_aeb[] = {
 	/* MODEE 3 PRO VIDEO */
 	false, //SENSOR_2LD_4032X2268_120FPS = 15,
 	false, //SENSOR_2LD_3328X1872_120FPS = 16,
+	/* MODE 3 SUB CROP */
+	false, //SENSOR_2LD_2800X2100_30FPS = 17,
 };
 
 enum sensor_2ld_load_sram_mode {
@@ -123,6 +121,28 @@ enum sensor_2ld_load_sram_mode {
 	SENSOR_2LD_4032x2268_24FPS_LOAD_SRAM,
 	SENSOR_2LD_4032x2268_60FPS_LOAD_SRAM,
 	SENSOR_2LD_1008x756_120FPS_LOAD_SRAM,
+};
+
+struct sensor_2ld_private_data {
+	const struct sensor_regs global_a2;
+	const struct sensor_regs global_a3;
+#ifdef USE_CAMERA_SENSOR_RETENTION
+	const struct sensor_regs global_retention;
+	const struct sensor_regs *retention;
+	u32 max_retention_num;
+	const struct sensor_regs *load_sram;
+	u32 max_load_sram_num;
+#endif
+};
+
+static const struct sensor_reg_addr sensor_2ld_reg_addr = {
+	.fll = 0x0340,
+	.fll_shifter = 0x0702,
+	.cit = 0x0202,
+	.cit_shifter = 0x0704,
+	.again = 0x0204,
+	.dgain = 0x020E,
+	.group_param_hold = 0x0104,
 };
 
 static const u32 sensor_2ld_cis_LTE_settings_1[] = {
@@ -246,4 +266,3 @@ int sensor_2ld_cis_retention_prepare(struct v4l2_subdev *subdev);
 #endif
 int sensor_2ld_cis_set_lownoise_mode_change(struct v4l2_subdev *subdev);
 #endif
-const u32 *pablo_get_cis_2ld_setfile(void);

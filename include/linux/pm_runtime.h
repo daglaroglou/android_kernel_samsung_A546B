@@ -22,6 +22,20 @@
 					    usage_count */
 #define RPM_AUTO		0x08	/* Use autosuspend_delay */
 
+/*
+ * Use this for defining a set of PM operations to be used in all situations
+ * (system suspend, hibernation or runtime PM).
+ *
+ * Note that the behaviour differs from the deprecated UNIVERSAL_DEV_PM_OPS()
+ * macro, which uses the provided callbacks for both runtime PM and system
+ * sleep, while DEFINE_RUNTIME_DEV_PM_OPS() uses pm_runtime_force_suspend()
+ * and pm_runtime_force_resume() for its system sleep callbacks.
+ */
+#define DEFINE_RUNTIME_DEV_PM_OPS(name, suspend_fn, resume_fn, idle_fn) \
+	_DEFINE_DEV_PM_OPS(name, pm_runtime_force_suspend, \
+			   pm_runtime_force_resume, suspend_fn, \
+			   resume_fn, idle_fn)
+
 #ifdef CONFIG_PM
 extern struct workqueue_struct *pm_wq;
 
@@ -32,6 +46,7 @@ static inline bool queue_pm_work(struct work_struct *work)
 
 extern int pm_generic_runtime_suspend(struct device *dev);
 extern int pm_generic_runtime_resume(struct device *dev);
+extern bool pm_runtime_need_not_resume(struct device *dev);
 extern int pm_runtime_force_suspend(struct device *dev);
 extern int pm_runtime_force_resume(struct device *dev);
 
@@ -220,6 +235,7 @@ static inline bool queue_pm_work(struct work_struct *work) { return false; }
 
 static inline int pm_generic_runtime_suspend(struct device *dev) { return 0; }
 static inline int pm_generic_runtime_resume(struct device *dev) { return 0; }
+static inline bool pm_runtime_need_not_resume(struct device *dev) {return true; }
 static inline int pm_runtime_force_suspend(struct device *dev) { return 0; }
 static inline int pm_runtime_force_resume(struct device *dev) { return 0; }
 

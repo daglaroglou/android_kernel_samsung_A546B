@@ -103,6 +103,7 @@ struct anon_vma_name *anon_vma_name(struct vm_area_struct *vma)
 
 	return vma->anon_name;
 }
+EXPORT_SYMBOL_GPL(anon_vma_name);
 
 /* mmap_lock should be write-locked */
 static int replace_anon_vma_name(struct vm_area_struct *vma,
@@ -185,7 +186,7 @@ success:
 	/*
 	 * vm_flags is protected by the mmap_lock held in write mode.
 	 */
-	vma->vm_flags = new_flags;
+	vma->vm_flags = vma_pad_fixup_flags(vma, new_flags);
 	if (!vma->vm_file) {
 		error = replace_anon_vma_name(vma, anon_name);
 		if (error)

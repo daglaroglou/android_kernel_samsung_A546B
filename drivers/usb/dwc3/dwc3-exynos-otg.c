@@ -693,6 +693,9 @@ static int dwc3_otg_start_gadget(struct otg_fsm *fsm, int on)
 		exynos->vbus_state = false;
 		dwc->ev_buf->flags &= ~BIT(20);
 		pr_info("%s: clear BIT(20) event buffer flags\n", __func__);
+		/* mask all interrupts */
+		dwc3_writel(dwc->regs, DWC3_DEVTEN, 0x00);
+
 #if IS_ENABLED(CONFIG_USB_EXYNOS_TPMON_MODULE)
 		usb_tpmon_close();
 #endif

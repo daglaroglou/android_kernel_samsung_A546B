@@ -4009,6 +4009,9 @@ static ssize_t store_bcm_bw(struct device *dev,
 			&ip_idx[4], &ip_idx[5], &ip_idx[6], &ip_idx[7],
 			&ip_idx[8], &ip_idx[9]);
 
+	if (ret != 13)
+		return -EINVAL;
+
 	if (num_ip > 10) {
 		pr_info("num_ip should not be bigger than 10 (yours: %d)\n",
 			num_ip);
@@ -4032,8 +4035,23 @@ static ssize_t store_bcm_bw(struct device *dev,
 		}
 
 		bcm_bw = kzalloc(sizeof(struct exynos_bcm_bw), GFP_KERNEL);
+		if (bcm_bw == NULL) {
+			BCM_ERR("%s: faild allocated bcm_bw\n",	__func__);
+			goto out;
+		}
 		bcm_bw->ip_idx = kcalloc(num_ip, sizeof(unsigned int), GFP_KERNEL);
+		if (bcm_bw->ip_idx == NULL) {
+			BCM_ERR("%s: faild allocated ip_idx\n", __func__);
+			kfree(bcm_bw);
+			goto out;
+		}
 		bcm_bw->bw_data = kcalloc(num_ip, sizeof(struct exynos_bcm_bw_data), GFP_KERNEL);
+		if (bcm_bw->bw_data == NULL) {
+			BCM_ERR("%s: faild allocated bw_data\n", __func__);
+			kfree(bcm_bw->ip_idx);
+			kfree(bcm_bw);
+			goto out;
+		}
 		bcm_bw->measure_time = measure_time;
 		bcm_bw->num_ip = num_ip;
 
@@ -4049,6 +4067,7 @@ static ssize_t store_bcm_bw(struct device *dev,
 		if (bcm_bw)
 			kfree(bcm_bw);
 	}
+out:
 	mutex_unlock(&bcm_bw_lock);
 
 	return count;

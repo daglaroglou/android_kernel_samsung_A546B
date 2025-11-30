@@ -1867,12 +1867,9 @@ static int functionfs_bind(struct ffs_data *ffs, struct usb_composite_dev *cdev)
 
 	ENTER();
 
-	if (ffs->state != FFS_ACTIVE
-		 || test_and_set_bit(FFS_FL_BOUND, &ffs->flags)){
-		pr_err("WARN_ON: %s: ffs->state %d, ffs->flags 0x%x\n",
-                                               __func__, ffs->state, ffs->flags);
+	if ((ffs->state != FFS_ACTIVE
+		 || test_and_set_bit(FFS_FL_BOUND, &ffs->flags)))
 		return -EBADFD;
-	}
 
 	first_id = usb_string_ids_n(cdev, ffs->strings_count);
 	if (first_id < 0)
@@ -3420,7 +3417,7 @@ static int ffs_func_setup(struct usb_function *f,
 	__ffs_event_add(ffs, FUNCTIONFS_SETUP);
 	spin_unlock_irqrestore(&ffs->ev.waitq.lock, flags);
 
-	return creq->wLength == 0 ? USB_GADGET_DELAYED_STATUS : 0;
+	return ffs->ev.setup.wLength == 0 ? USB_GADGET_DELAYED_STATUS : 0;
 }
 
 static bool ffs_func_req_match(struct usb_function *f,

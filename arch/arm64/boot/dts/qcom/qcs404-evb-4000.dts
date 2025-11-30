@@ -1384,7 +1384,7 @@
 				vddxo-supply = <0x15>;
 				vddrf-supply = <0x31>;
 				vddch0-supply = <0x34>;
-				local-bd-address = [02 00 00 00 5a ad];
+				local-bd-address = [00 00 00 00 00 00];
 				max-speed = <0x30d400>;
 			};
 		};

@@ -220,6 +220,7 @@ exit:
 	decon_err(decon, "not a trigger condition\n");
 	return -EINVAL;
 }
+EXPORT_SYMBOL(decon_trigger_recovery);
 
 bool decon_read_recovering(struct exynos_drm_crtc *exynos_crtc)
 {

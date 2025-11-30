@@ -1076,6 +1076,7 @@
 					vddrf-supply = <0x4f>;
 					vddch0-supply = <0x50>;
 					max-speed = <0x30d400>;
+					qcom,local-bd-address-broken;
 					phandle = <0x137>;
 				};
 			};

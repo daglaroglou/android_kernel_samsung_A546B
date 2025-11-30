@@ -443,3 +443,9 @@ config SCSC_WLAN_TAS
 	depends on SCSC_WLAN_TX_API
 	help
 	  This option enables TAS in Host. Native daemon should be configured.
+
+config SCSC_WLBT_PTR_PRINT
+	bool "Enable this flag to print memory address used for debugging"
+	default n
+	help
+		Enable this flag to print memory address used for debugging

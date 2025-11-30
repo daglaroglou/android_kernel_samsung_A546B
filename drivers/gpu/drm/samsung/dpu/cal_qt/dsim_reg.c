@@ -18,6 +18,9 @@
 #include <regs-dsim.h>
 #include <dsim_cal.h>
 #include <cal_config.h>
+#ifdef __linux__
+#include <exynos_drm_dsim.h>
+#endif
 
 static struct cal_regs_desc regs_desc[REGS_DSIM_TYPE_MAX][MAX_DSI_CNT];
 
@@ -450,6 +453,7 @@ static void dsim_reg_set_dphy_timing_values(u32 id,
 	u32 val;
 	u32 hs_en, skewcal_en;
 	u32 i;
+	struct dsim_device *dsim = get_dsim_drvdata(0);
 
 	/* HS mode setting */
 	if (hsmode) {
@@ -484,7 +488,11 @@ static void dsim_reg_set_dphy_timing_values(u32 id,
 		DSIM_PHY_TCLK_ZERO(t->clk_zero);
 	dsim_phy_write(id, DSIM_PHY_MC_TIME_CON1, val);
 
-	val = DSIM_PHY_THS_EXIT(t->hs_exit) | DSIM_PHY_TCLK_TRAIL(t->clk_trail);
+	if (dsim && (dsim->config.clk_trail != UINT_MAX))
+		val = DSIM_PHY_THS_EXIT(t->hs_exit) | DSIM_PHY_TCLK_TRAIL(dsim->config.clk_trail);
+	else
+		val = DSIM_PHY_THS_EXIT(t->hs_exit) | DSIM_PHY_TCLK_TRAIL(t->clk_trail);
+
 	dsim_phy_write(id, DSIM_PHY_MC_TIME_CON2, val);
 
 	val = DSIM_PHY_TCLK_POST(t->clk_post);

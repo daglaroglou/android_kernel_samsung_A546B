@@ -32,6 +32,10 @@
 #include <gpexbe_debug.h>
 
 #include "gpex_clock_internal.h"
+#if IS_ENABLED(CONFIG_MALI_DEBUG_KERNEL_SYSFS)
+#include <trace/events/power.h>
+#define CREATE_TRACE_POINTS
+#endif
 
 #define CPU_MAX INT_MAX
 
@@ -400,6 +404,14 @@ int gpex_clock_set(int clk)
 	mutex_unlock(&clk_info.clock_lock);
 
 	GPU_LOG(MALI_EXYNOS_DEBUG, "clk[%d -> %d]\n", prev_clk, target_clk);
+
+#if IS_ENABLED(CONFIG_MALI_DEBUG_KERNEL_SYSFS)
+	trace_clock_set_rate("Gpu Min Limit",
+		MAX(clk_info.gpu_min_clock, clk_info.user_min_lock_input), 0);
+	trace_clock_set_rate("Gpu Max Limit",
+		(!clk_info.user_max_lock_input)?clk_info.gpu_max_clock :
+		MIN(clk_info.gpu_max_clock, clk_info.user_max_lock_input), 0);
+#endif
 
 	return ret;
 }

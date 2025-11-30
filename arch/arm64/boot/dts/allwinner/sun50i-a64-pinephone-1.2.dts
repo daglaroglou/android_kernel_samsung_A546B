@@ -1155,6 +1155,7 @@
 				interrupts = <0x07 0x05 0x01>;
 				vdd-supply = <0x3d>;
 				vddio-supply = <0x3d>;
+				mount-matrix = "0\01\00\0-1\00\00\00\00\01";
 			};
 		};
 

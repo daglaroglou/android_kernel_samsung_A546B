@@ -27,8 +27,6 @@
 #include "../core/phy.h"
 #include "xhci.h"
 #include "xhci-plat.h"
-#include "xhci-mvebu.h"
-#include "xhci-rcar.h"
 #include "../dwc3/dwc3-exynos.h"
 #include "../dwc3/exynos-otg.h"
 #include "xhci-exynos.h"
@@ -491,22 +489,6 @@ static struct attribute *xhci_exynos_attrs[] = {
 ATTRIBUTE_GROUPS(xhci_exynos);
 
 #ifdef CONFIG_OF
-static const struct xhci_plat_priv xhci_plat_marvell_armada = {
-	.init_quirk = xhci_mvebu_mbus_init_quirk,
-};
-
-static const struct xhci_plat_priv xhci_plat_marvell_armada3700 = {
-	.init_quirk = xhci_mvebu_a3700_init_quirk,
-};
-
-static const struct xhci_plat_priv xhci_plat_renesas_rcar_gen2 = {
-	SET_XHCI_PLAT_PRIV_FOR_RCAR(XHCI_RCAR_FIRMWARE_NAME_V1)
-};
-
-static const struct xhci_plat_priv xhci_plat_renesas_rcar_gen3 = {
-	SET_XHCI_PLAT_PRIV_FOR_RCAR(XHCI_RCAR_FIRMWARE_NAME_V3)
-};
-
 static const struct of_device_id usb_xhci_of_match[] = {
 	{
 	 .compatible = "generic-xhci",

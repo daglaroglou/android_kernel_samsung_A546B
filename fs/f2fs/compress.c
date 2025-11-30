@@ -761,7 +761,12 @@ void f2fs_decompress_cluster(struct decompress_io_ctx *dic, bool in_task)
 
 	if (dic->clen > PAGE_SIZE * dic->nr_cpages - COMPRESS_HEADER_SIZE) {
 		ret = -EFSCORRUPTED;
-		f2fs_handle_error(sbi, ERROR_FAIL_DECOMPRESSION);
+
+		/* Avoid f2fs_commit_super in irq context */
+		if (!in_task)
+			f2fs_save_errors(sbi, ERROR_FAIL_DECOMPRESSION);
+		else
+			f2fs_handle_error(sbi, ERROR_FAIL_DECOMPRESSION);
 		goto out_release;
 	}
 
@@ -1257,7 +1262,7 @@ static int f2fs_write_compressed_pages(struct compress_ctx *cc,
 	loff_t psize;
 	int i, err;
 
-	/* we should bypass data pages to proceed the kworkder jobs */
+	/* we should bypass data pages to proceed the kworker jobs */
 	if (unlikely(f2fs_cp_error(sbi))) {
 		mapping_set_error(cc->rpages[0]->mapping, -EIO);
 		goto out_free;

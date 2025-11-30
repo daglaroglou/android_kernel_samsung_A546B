@@ -10153,6 +10153,8 @@ void slsi_mib_buf_append(struct slsi_mib_data *dst, size_t bufferLength, u8 *buf
  *******************************************************************************/
 #define SLSI_PSID_UNIFI_NANNY_TRIM_NOW 0x140A
 
+#define SLSI_PSID_UNIFI_DTIM_MULTIPLIER 0x0BBA
+
 /*******************************************************************************
  * NAME          : UnifiMapRadioIdToMacId
  * PSID          : 5131 (0x140B)

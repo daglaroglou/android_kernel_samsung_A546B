@@ -28,7 +28,7 @@
 
 		sleep-clk {
 			compatible = "fixed-clock";
-			clock-frequency = <0x7d00>;
+			clock-frequency = <0x7ffc>;
 			#clock-cells = <0x00>;
 			phandle = <0x16>;
 		};

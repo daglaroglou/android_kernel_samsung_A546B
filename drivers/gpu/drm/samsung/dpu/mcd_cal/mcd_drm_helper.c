@@ -154,6 +154,43 @@ int snprintf_disp_panic_disp_clock(char *buf, size_t size, u64 disp_clock)
 			get_disp_panic_bigdata_key_string(DISP_PANIC_BIGDATA_KEY_DISPCLK), disp_clock);
 }
 
+bool mcd_drm_decon_is_recovery_supported(struct decon_device *decon)
+{
+	enum recovery_state state = exynos_recovery_get_state(decon);
+
+	return ((state == RECOVERY_NOT_SUPPORTED) ? false : true);
+}
+EXPORT_SYMBOL(mcd_drm_decon_is_recovery_supported);
+
+bool mcd_drm_decon_is_recovery_begin(struct decon_device *decon)
+{
+	bool begin = false;
+	enum recovery_state state = exynos_recovery_get_state(decon);
+
+	if ((state == RECOVERY_TRIGGER) || (state == RECOVERY_BEGIN))
+		begin = true;
+
+#if defined(CONFIG_EXYNOS_UEVENT_RECOVERY_SOLUTION)
+	if (!begin && state == RECOVERY_UEVENT)
+		begin = true;
+#endif
+
+	return begin;
+}
+EXPORT_SYMBOL(mcd_drm_decon_is_recovery_begin);
+
+bool mcd_drm_decon_is_recovery_running(struct decon_device *decon)
+{
+	bool recovering = false;
+	enum recovery_state state = exynos_recovery_get_state(decon);
+
+	if ((mcd_drm_decon_is_recovery_begin(decon)) || (state == RECOVERY_RESTORE))
+		recovering = true;
+
+	return recovering;
+}
+EXPORT_SYMBOL(mcd_drm_decon_is_recovery_running);
+
 /**
  * mcd_drm_wait_one_vblank_timeout - wait for one vblank with timeout
  * @dev: DRM device
