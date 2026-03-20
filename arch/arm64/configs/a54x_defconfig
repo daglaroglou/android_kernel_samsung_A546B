@@ -1185,7 +1185,7 @@ CONFIG_PID_IN_CONTEXTIDR=y
 CONFIG_FUNCTION_ERROR_INJECTION=y
 # CONFIG_RUNTIME_TESTING_MENU is not set
 
-# Disable CSC check
+# Unload kernel modules
 CONFIG_MODULES=y
 CONFIG_MODULE_FORCE_LOAD=y
 CONFIG_MODULE_UNLOAD=y
@@ -1206,6 +1206,9 @@ CONFIG_RKP_CFP=n
 CONFIG_SECURITY_DEFEX=n
 CONFIG_PROCA=n
 CONFIG_FIVE=n
+CONFIG_RKP=n
+CONFIG_KDP_NS=n
+CONFIG_KDP=n
 
 # LSM
 CONFIG_LSM="landlock,lockdown,baseband_guard,yama,loadpin,safesetid,integrity,selinux,smack,tomoyo,apparmor,bpf"
