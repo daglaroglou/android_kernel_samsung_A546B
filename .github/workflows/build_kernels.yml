@@ -39,7 +39,7 @@ jobs:
     if: always()
     steps:
       - name: Checkout DΛG branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: "DΛG"
 
@@ -130,7 +130,7 @@ jobs:
 
     steps:
       - name: Checkout DΛG branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: "DΛG"
 
@@ -196,7 +196,7 @@ jobs:
       - name: Cache toolchain
         if: steps.selector.outputs.should_run == 'true'
         id: cache-toolchain
-        uses: actions/cache@v4
+        uses: actions/cache@v5.0.4
         with:
           path: ${{ env.TOOLCHAIN_DIR }}
           key: clang-r450784c-toolchain
@@ -502,7 +502,7 @@ jobs:
     if: always()
     steps:
       - name: Checkout DΛG branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: "DΛG"
 
@@ -612,7 +612,7 @@ jobs:
           EOF
 
       - name: Publish to GitHub
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v2.6.1
         with:
           files: /home/runner/release/*.zip
           name: DΛG Kernels - ${{ steps.date.outputs.DATE }}
@@ -661,7 +661,7 @@ jobs:
     if: always()
     steps:
       - name: Checkout DΛG branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: "DΛG"
 
@@ -691,6 +691,8 @@ jobs:
               '🗃️ *Repo:* `${{ github.repository }}`' \
               '━━━━━━━━━━━━━━━━━━━━━━' \
               '📝 *Changelog*' \
+              '\`\`\`' \
               '${{ steps.changelog.outputs.CHANGELOG }}' \
+              '\`\`\`' \
               '━━━━━━━━━━━━━━━━━━━━━━' \
               '📥 [Download from GitHub Releases](https://github.com/${{ github.repository }}/releases/tag/${{ steps.date.outputs.DATE }})')"
