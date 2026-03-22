@@ -579,9 +579,6 @@ jobs:
           | **Variant** | \`${{ github.event.inputs.variant }}\` |
           | **Date** | \`$(date +'%Y-%m-%d')\` |
           | **Run ID** | [\`${{ github.run_id }}\`](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
-          | **Build Time** | \`$(( env.BUILD_ELAPSED / 60 ))m $(( env.BUILD_ELAPSED % 60 ))s\` |
-          | **Kernel Image Size** | \`${{ env.IMAGE_SIZE }}\` |
-          | **Zip Size** | \`${{ env.ZIP_SIZE }}\` |
 
           ### 🛠️ Toolchain & Target
 
@@ -643,6 +640,14 @@ jobs:
             - **WildKSU Version:** ${{ steps.versions.outputs.WILDKSU_VERSION }}
             - **SUSFS Version:** 2.1.0
             ---
+            ### ❤️ Donation Links
+            | Field | Value |
+            |---|---|
+            | **PayPal** | https://paypal.me/daglaroglou |
+            | **Revolut** | https://revolut.me/daglaroglouc |
+            | **GitHub** | https://github.com/sponsors/daglaroglou |
+            | **BTC** | `bc1qp62x7ehcvddyf6yw4ye5dy9uw8hllxhah3u447` |
+            | **ETH** | `0xcD6782ADccb748ae13a08fd2A237dABE97Df0074` |
             <div align="center">
             力を解き放つ
             </div>
