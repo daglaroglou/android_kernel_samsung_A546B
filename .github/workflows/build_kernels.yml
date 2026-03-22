@@ -247,7 +247,7 @@ jobs:
             resukisu_plain)
               echo "⬇️  Fetching ReSukiSU (plain)..."
               curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash ;;
-            wildksu_canary)
+            wildksu)
               echo "⬇️  Fetching WildKSU (canary)..."
               curl -LSs "https://raw.githubusercontent.com/WildKernels/Wild_KSU/wild/kernel/setup.sh" | bash -s canary ;;
             *)
