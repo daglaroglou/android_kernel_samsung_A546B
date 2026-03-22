@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       variant:
-        description: 'Kernel variant to build'
+        description: "Kernel variant to build"
         required: true
-        default: 'All variants'
+        default: "All variants"
         type: choice
         options:
           - All variants
@@ -14,24 +14,34 @@ on:
           - Permissive
           - KSU
           - KSUN
-          - SukiSU
+          - ReSukiSU
           - WildKSU
           - KSU-SUSFS
           - KSUN-SUSFS
-          - SukiSU-SUSFS
+          - ReSukiSU-SUSFS
           - WildKSU-SUSFS
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-kernels-${{ github.ref }}-${{ github.event.inputs.variant }}
+  cancel-in-progress: false
+
+env:
+  TOOLCHAIN_DIR: $HOME/toolchain/clang-r450784c
+  TOOLCHAIN_ARCHIVE_URL: https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/llvm-r450784/clang-r450784c.tar.gz
 
 jobs:
   notify-start:
     name: Send Start Notification
     runs-on: ubuntu-latest
     if: always()
-    
     steps:
       - name: Checkout DΛG branch
         uses: actions/checkout@v4
         with:
-          ref: 'DΛG'
+          ref: "DΛG"
 
       - name: Send Telegram Start Notification
         run: |
@@ -43,281 +53,203 @@ jobs:
             -F parse_mode="Markdown" \
             -F disable_web_page_preview=true
 
-  build_dag:
-    name: Build DΛG Kernel
+  build:
+    name: Build ${{ matrix.variant }} Kernel
     needs: [notify-start]
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.variant == 'All variants' || github.event.inputs.variant == 'DΛG' }}
-    
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: DΛG
+            localversion: -DΛG
+            ksu_mode: none
+            susfs: false
+            permissive: false
+            extra_ksu_flags: ""
+          - variant: Permissive
+            localversion: -DΛG-PERMISSIVE
+            ksu_mode: none
+            susfs: false
+            permissive: true
+            extra_ksu_flags: ""
+          - variant: KSU
+            localversion: -DΛG-KSU
+            ksu_mode: ksu
+            susfs: false
+            permissive: false
+            extra_ksu_flags: "--enable CONFIG_KSU"
+          - variant: KSUN
+            localversion: -DΛG-KSUN
+            ksu_mode: ksun
+            susfs: false
+            permissive: false
+            extra_ksu_flags: "--enable CONFIG_KSU --enable CONFIG_KPROBES"
+          - variant: ReSukiSU
+            localversion: -DΛG-RESUKISU
+            ksu_mode: resukisu
+            susfs: false
+            permissive: false
+            extra_ksu_flags: "--enable CONFIG_KSU --enable CONFIG_KPM"
+          - variant: WildKSU
+            localversion: -DΛG-WILDKSU
+            ksu_mode: wildksu_canary
+            susfs: false
+            permissive: false
+            extra_ksu_flags: "--enable CONFIG_KSU --enable CONFIG_KPROBES"
+          - variant: KSU-SUSFS
+            localversion: -DΛG-KSU_SUSFS
+            ksu_mode: ksu
+            susfs: true
+            permissive: false
+            extra_ksu_flags: "--enable CONFIG_KSU"
+          - variant: KSUN-SUSFS
+            localversion: -DΛG-KSUN_SUSFS
+            ksu_mode: ksun_pershoot
+            susfs: true
+            permissive: false
+            extra_ksu_flags: "--enable CONFIG_KSU --enable CONFIG_KPROBES --enable CONFIG_TRACEPOINTS"
+          - variant: ReSukiSU-SUSFS
+            localversion: -DΛG-RESUKISU_SUSFS
+            ksu_mode: resukisu_plain
+            susfs: true
+            permissive: false
+            extra_ksu_flags: "--enable CONFIG_KSU"
+          - variant: WildKSU-SUSFS
+            localversion: -DΛG-WILDKSU_SUSFS
+            ksu_mode: wildksu
+            susfs: true
+            permissive: false
+            extra_ksu_flags: "--enable CONFIG_KSU --enable CONFIG_KPROBES"
+
     steps:
       - name: Checkout DΛG branch
         uses: actions/checkout@v4
         with:
-          ref: 'DΛG'
+          ref: "DΛG"
 
-      - name: Read CHANGELOG.md
-        id: changelog
+      - name: Decide whether this variant should run
+        id: selector
         run: |
-          CHANGELOG=$(cat CHANGELOG.md)
-          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Download Apache Arrow's util_free_space.sh
-        run: |
-          curl -L -o util_free_space.sh https://raw.githubusercontent.com/apache/arrow/main/ci/scripts/util_free_space.sh
-          chmod +x util_free_space.sh
-          ./util_free_space.sh
-
-      - name: Install dependencies
-        run: |
-          sudo apt update && sudo apt install -y git device-tree-compiler lz4 xz-utils zlib1g-dev openjdk-17-jdk gcc g++ python3 python-is-python3 p7zip-full android-sdk-libsparse-utils erofs-utils \
-          default-jdk git gnupg flex bison gperf build-essential zip curl libc6-dev libncurses-dev libx11-dev libreadline-dev libgl1 libgl1-mesa-dev \
-          python3 make sudo gcc g++ bc grep tofrodos python3-markdown libxml2-utils xsltproc zlib1g-dev python-is-python3 libc6-dev libtinfo6 \
-          make repo cpio kmod openssl libelf-dev pahole libssl-dev libarchive-tools zstd rsync --fix-missing && \
-          wget http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb && \
-          sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb && \
-          rm libtinfo5_6.3-2ubuntu0.1_amd64.deb
-      
-      - name: Make directories
-        run: |
-          mkdir -p $HOME/kernel
-          mkdir -p $HOME/toolchain
-          mkdir -p $HOME/toolchain/clang-r450784c
-
-      - name: Cache toolchain
-        id: cache-toolchain
-        uses: actions/cache@v4
-        with:
-          path: $HOME/toolchain/clang-r450784c
-          key: clang-r450784c-toolchain
-
-      - name: Fetch toolchain
-        if: steps.cache-toolchain.outputs.cache-hit != 'true'
-        run: |
-          wget -c https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/llvm-r450784/clang-r450784c.tar.gz -O clang.tar.gz
-          tar -xf clang.tar.gz -C $HOME/toolchain/clang-r450784c && rm -rf clang.tar.gz
-        
-      - name: Fetch AnyKernel3
-        run: |
-          git clone --branch a54x https://github.com/daglaroglou/AnyKernel3.git $HOME/AnyKernel3
-
-      - name: Fetch kernel source
-        run: |
-          git clone https://github.com/daglaroglou/android_kernel_samsung_a54x $HOME/kernel
-
-      - name: Login actions bot
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Set date
-        id: date
-        run: |
-          echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
-
-      - name: Set start time
-        id: start_time
-        run: |
-          echo "START_TIME=$(date +%s)" >> $GITHUB_ENV
-
-      - name: Fetch kernel manager versions
-        id: versions
-        run: |
-          KSU_VERSION=$(curl -s https://api.github.com/repos/tiann/KernelSU/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-          echo "KSU_VERSION=$KSU_VERSION" >> $GITHUB_ENV
-          echo "KernelSU version: $KSU_VERSION"
-          
-          KSUN_VERSION=$(curl -s https://api.github.com/repos/KernelSU-Next/KernelSU-Next/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-          echo "KSUN_VERSION=$KSUN_VERSION" >> $GITHUB_ENV
-          echo "KernelSU-Next version: $KSUN_VERSION"
-          
-          SUKISU_VERSION=$(curl -s https://api.github.com/repos/SukiSU-Ultra/SukiSU-Ultra/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-          echo "SUKISU_VERSION=$SUKISU_VERSION" >> $GITHUB_ENV
-          echo "SukiSU Ultra version: $SUKISU_VERSION"
-          
-          WILDKSU_VERSION=$(curl -s https://api.github.com/repos/WildKernels/Wild_KSU/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-          echo "WILDKSU_VERSION=$WILDKSU_VERSION" >> $GITHUB_ENV
-          echo "WildKSU version: $WILDKSU_VERSION"
-
-      - name: Set config variables for Mountify
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_TMPFS_XATTR \
-            --enable CONFIG_TMPFS_POSIX_ACL
-
-      - name: Set config variable for Localversion
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --set-str CONFIG_LOCALVERSION "-DΛG" \
-            --set-val CONFIG_LOCALVERSION_AUTO n
-
-      - name: Build kernel
-        run: |
-          cd $HOME/kernel
-          export PATH="$HOME/toolchain/clang-r450784c/bin:$PATH"
-          export CONFIGS="a54x_defconfig custom.config"
-          export KERNEL_DIR=$HOME/kernel
-          export KBUILD_BUILD_HOST="Github-Actions"
-          export KBUILD_BUILD_USER="daglaroglou"
-          export PLATFORM_VERSION=16
-          export TARGET_SOC=s5e8835
-          export DEPMOD=depmod
-          MAKE_PARAMS="-j$(nproc --all) ARCH=arm64 KBUILD_OUTPUT=$HOME/kernel/out CC=clang LLVM=1 LLVM_IAS=1 CLANG_TRIPLE=llvm- CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-"
-          make $MAKE_PARAMS $CONFIGS
-          make $MAKE_PARAMS
-
-      - name: Extract version info
-        id: version_info
-        run: |
-          cd $HOME/kernel
-          LOCALVERSION=$(grep "CONFIG_LOCALVERSION=" arch/arm64/configs/custom.config | cut -d'=' -f2 | tr -d '"')
-          echo "LOCALVERSION=$LOCALVERSION" >> $GITHUB_ENV
-          KERNEL_NAME_RAW="${LOCALVERSION#-}"
-          KERNEL_NAME_RELEASE="${KERNEL_NAME_RAW//Λ/A}"
-          echo "KERNEL_NAME=$KERNEL_NAME_RELEASE" >> $GITHUB_ENV
-          echo "Extracted kernel name: $KERNEL_NAME_RELEASE"
-
-      - name: Verify kernel build
-        run: |
-          if [ ! -f "$HOME/kernel/out/arch/arm64/boot/Image" ]; then
-            echo "Error: Kernel Image not found!"
-            exit 1
+          if [[ "${{ github.event.inputs.variant }}" == "All variants" || "${{ github.event.inputs.variant }}" == "${{ matrix.variant }}" ]]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
           fi
-          echo "Kernel build successful!"
-          ls -la $HOME/kernel/out/arch/arm64/boot/Image
 
-      - name: Create zip
+      - name: Skip non-selected variant
+        if: steps.selector.outputs.should_run != 'true'
+        run: echo "Skipping ${{ matrix.variant }} because input variant is ${{ github.event.inputs.variant }}"
+
+      - name: Set date and start time
+        if: steps.selector.outputs.should_run == 'true'
         run: |
-          cd $HOME/AnyKernel3
-          cp $HOME/kernel/out/arch/arm64/boot/Image $HOME/AnyKernel3/
-          7z a "${{ env.KERNEL_NAME }}.zip" . -xr!*.git*
-
-      - name: Calculate elapsed time
-        id: elapsed_time
-        run: |
-          NOW=$(date +%s)
-          ELAPSED=$((NOW - START_TIME))
-          MINUTES=$((ELAPSED / 60))
-          SECONDS=$((ELAPSED % 60))
-          ELAPSED_TIME="${MINUTES}m ${SECONDS}s"
-          echo "ELAPSED_TIME=$ELAPSED_TIME" >> $GITHUB_OUTPUT 
-
-      - name: Publish to GitHub
-        id: release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: /home/runner/AnyKernel3/*.zip
-          name: DΛG Kernels - ${{ env.DATE }}
-          tag_name: "${{ env.DATE }}"
-          body: |
-            ### Changelog
-            ${{ steps.changelog.outputs.changelog }}
-
-            ### Kernel managers
-            - **KernelSU:** https://github.com/tiann/KernelSU
-            - **KernelSU-Next:** https://github.com/KernelSU-Next/KernelSU-Next
-            - **SukiSU Ultra:** https://github.com/SukiSU-Ultra/SukiSU-Ultra
-            - **WildKSU:** https://github.com/WildKernels/Wild_KSU
-
-            ### SUSFS Module
-            - **SUSFS:** https://github.com/sidex15/susfs4ksu-module (Optional for SukiSU Ultra)
-
-            ### Build Information
-            - **Kernel Version:** 5.15.180  
-            - **Clang Version:** r450784c
-            - **KernelSU Version:** ${{ env.KSU_VERSION }}
-            - **KernelSU-Next Version:** ${{ env.KSUN_VERSION }}
-            - **SukiSU Ultra Version:** ${{ env.SUKISU_VERSION }}
-            - **WildKSU Version:** ${{ env.WILDKSU_VERSION }}
-            - **SUSFS Version:** 2.0.0
-            - **Build Time:** ${{ steps.elapsed_time.outputs.ELAPSED_TIME }}
-            ---
-            <div align="center">
-            力を解き放つ
-            </div>
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  build_permissive:
-    name: Build Permissive Kernel
-    needs: [notify-start]
-    runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.variant == 'All variants' || github.event.inputs.variant == 'Permissive' }}
-    
-    steps:
-      - name: Checkout DΛG branch
-        uses: actions/checkout@v4
-        with:
-          ref: 'DΛG'
+          echo "DATE=$(date +'%Y-%m-%d')" >> "$GITHUB_ENV"
+          echo "START_TIME=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Download Apache Arrow's util_free_space.sh
+        if: steps.selector.outputs.should_run == 'true'
         run: |
           curl -L -o util_free_space.sh https://raw.githubusercontent.com/apache/arrow/main/ci/scripts/util_free_space.sh
           chmod +x util_free_space.sh
           ./util_free_space.sh
 
       - name: Install dependencies
+        if: steps.selector.outputs.should_run == 'true'
         run: |
-          sudo apt update && sudo apt install -y git device-tree-compiler lz4 xz-utils zlib1g-dev openjdk-17-jdk gcc g++ python3 python-is-python3 p7zip-full android-sdk-libsparse-utils erofs-utils \
-          default-jdk git gnupg flex bison gperf build-essential zip curl libc6-dev libncurses-dev libx11-dev libreadline-dev libgl1 libgl1-mesa-dev \
-          python3 make sudo gcc g++ bc grep tofrodos python3-markdown libxml2-utils xsltproc zlib1g-dev python-is-python3 libc6-dev libtinfo6 \
-          make repo cpio kmod openssl libelf-dev pahole libssl-dev libarchive-tools zstd rsync --fix-missing && \
-          wget http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb && \
-          sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb && \
+          sudo apt update
+          sudo apt install -y \
+            git device-tree-compiler lz4 xz-utils zlib1g-dev openjdk-17-jdk gcc g++ python3 python-is-python3 \
+            p7zip-full android-sdk-libsparse-utils erofs-utils default-jdk gnupg flex bison gperf build-essential \
+            zip curl libc6-dev libncurses-dev libx11-dev libreadline-dev libgl1 libgl1-mesa-dev bc grep tofrodos \
+            python3-markdown libxml2-utils xsltproc libtinfo6 make repo cpio kmod openssl libelf-dev pahole \
+            libssl-dev libarchive-tools zstd rsync --fix-missing
+          wget https://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb
+          sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb
           rm libtinfo5_6.3-2ubuntu0.1_amd64.deb
-      
-      - name: Make directories
+
+      - name: Prepare directories
+        if: steps.selector.outputs.should_run == 'true'
         run: |
-          mkdir -p $HOME/kernel
-          mkdir -p $HOME/toolchain
-          mkdir -p $HOME/toolchain/clang-r450784c
+          mkdir -p "$HOME/toolchain"
+          mkdir -p "$TOOLCHAIN_DIR"
 
       - name: Cache toolchain
+        if: steps.selector.outputs.should_run == 'true'
         id: cache-toolchain
         uses: actions/cache@v4
         with:
-          path: $HOME/toolchain/clang-r450784c
+          path: ${{ env.TOOLCHAIN_DIR }}
           key: clang-r450784c-toolchain
 
       - name: Fetch toolchain
-        if: steps.cache-toolchain.outputs.cache-hit != 'true'
+        if: steps.selector.outputs.should_run == 'true' && steps.cache-toolchain.outputs.cache-hit != 'true'
         run: |
-          wget -c https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/llvm-r450784/clang-r450784c.tar.gz -O clang.tar.gz
-          tar -xf clang.tar.gz -C $HOME/toolchain/clang-r450784c && rm -rf clang.tar.gz
-        
+          wget -c "$TOOLCHAIN_ARCHIVE_URL" -O clang.tar.gz
+          tar -xf clang.tar.gz -C "$TOOLCHAIN_DIR"
+          rm -f clang.tar.gz
+
       - name: Fetch AnyKernel3
+        if: steps.selector.outputs.should_run == 'true'
         run: |
-          git clone --branch a54x https://github.com/daglaroglou/AnyKernel3.git $HOME/AnyKernel3
+          git clone --depth=1 --branch a54x https://github.com/daglaroglou/AnyKernel3.git "$HOME/AnyKernel3"
 
-      - name: Fetch kernel source
+      - name: Import manager driver
+        if: steps.selector.outputs.should_run == 'true'
         run: |
-          git clone https://github.com/daglaroglou/android_kernel_samsung_a54x $HOME/kernel
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
 
-      - name: Login actions bot
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          case "${{ matrix.ksu_mode }}" in
+            none)
+              echo "No manager driver for this variant" ;;
+            ksu)
+              curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main ;;
+            ksun)
+              curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s dev ;;
+            ksun_pershoot)
+              curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/dev-susfs/kernel/setup.sh" | bash -s dev-susfs ;;
+            resukisu)
+              curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s main ;;
+            resukisu_plain)
+              curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash ;;
+            wildksu_canary)
+              curl -LSs "https://raw.githubusercontent.com/WildKernels/Wild_KSU/wild/kernel/setup.sh" | bash -s canary ;;
+            wildksu)
+              curl -LSs "https://raw.githubusercontent.com/WildKernels/Wild_KSU/wild/kernel/setup.sh" | bash -s wild ;;
+            *)
+              echo "Unknown manager mode: ${{ matrix.ksu_mode }}" >&2
+              exit 1 ;;
+          esac
 
-      - name: Set date
+      - name: Apply permissive patch
+        if: steps.selector.outputs.should_run == 'true' && matrix.permissive
         run: |
-          echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
-
-      - name: Downloading patches
-        run: |
-          cd $HOME/kernel
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
           wget https://raw.githubusercontent.com/daglaroglou/a54x_kernel_patches/refs/heads/main/permisssive/set_permissive.patch
-
-      - name: Apply patches
-        run: |
-          cd $HOME/kernel
           patch -p1 < set_permissive.patch
 
-      - name: Set config variables for Permissive
+      - name: Apply WildKSU multi-manager patch
+        if: steps.selector.outputs.should_run == 'true' && matrix.variant == 'WildKSU'
         run: |
-          cd $HOME/kernel
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE/Wild_KSU"
+          wget https://raw.githubusercontent.com/WildKernels/kernel_patches/refs/heads/main/next/susfs_fix_patches/stable/v2.1.0/multi_manager.patch
+          patch -p1 < multi_manager.patch
+
+      - name: Configure KernelSU / manager options
+        if: steps.selector.outputs.should_run == 'true' && matrix.extra_ksu_flags != ''
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          ./scripts/config --file arch/arm64/configs/custom.config ${{ matrix.extra_ksu_flags }}
+
+      - name: Configure permissive options
+        if: steps.selector.outputs.should_run == 'true' && matrix.permissive
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
           ./scripts/config --file arch/arm64/configs/custom.config \
             --enable CONFIG_SECURITY_SELINUX \
             --disable CONFIG_SECURITY_SELINUX_BOOTPARAM \
@@ -340,1432 +272,249 @@ jobs:
             --disable CONFIG_INTEGRITY_TRUSTED_KEYRING \
             --disable CONFIG_INTEGRITY_AUDIT
 
-      - name: Set config variables for Mountify
+      - name: Import SUSFS and fetch patch sources
+        if: steps.selector.outputs.should_run == 'true' && matrix.susfs
         run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_TMPFS_XATTR \
-            --enable CONFIG_TMPFS_POSIX_ACL
+          set -euo pipefail
+          cd "$HOME"
 
-      - name: Set config variable for Localversion
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --set-str CONFIG_LOCALVERSION "-DΛG-PERMISSIVE" \
-            --set-val CONFIG_LOCALVERSION_AUTO n
+          case "${{ matrix.variant }}" in
+            KSUN-SUSFS)
+              git clone --depth=1 -b gki-android13-5.15 https://gitlab.com/daglaroglou/susfs4ksu.git ;;
+            *)
+              git clone --depth=1 -b gki-android13-5.15 https://gitlab.com/simonpunk/susfs4ksu.git ;;
+          esac
 
-      - name: Build kernel
-        run: |
-          cd $HOME/kernel
-          export PATH="$HOME/toolchain/clang-r450784c/bin:$PATH"
-          export CONFIGS="a54x_defconfig custom.config"
-          export KERNEL_DIR=$HOME/kernel
-          export KBUILD_BUILD_HOST="Github-Actions"
-          export KBUILD_BUILD_USER="daglaroglou"
-          export PLATFORM_VERSION=16
-          export TARGET_SOC=s5e8835
-          export DEPMOD=depmod
-          MAKE_PARAMS="-j$(nproc --all) ARCH=arm64 KBUILD_OUTPUT=$HOME/kernel/out CC=clang LLVM=1 LLVM_IAS=1 CLANG_TRIPLE=llvm- CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-"
-          make $MAKE_PARAMS $CONFIGS
-          make $MAKE_PARAMS
+          git clone --depth=1 https://github.com/daglaroglou/a54x_kernel_patches.git
 
-      - name: Extract version info
-        run: |
-          cd $HOME/kernel
-          LOCALVERSION=$(grep "CONFIG_LOCALVERSION=" arch/arm64/configs/custom.config | cut -d'=' -f2 | tr -d '"')
-          echo "LOCALVERSION=$LOCALVERSION" >> $GITHUB_ENV
-          KERNEL_NAME_RAW="${LOCALVERSION#-}"
-          KERNEL_NAME_RELEASE="${KERNEL_NAME_RAW//Λ/A}"
-          echo "KERNEL_NAME=$KERNEL_NAME_RELEASE" >> $GITHUB_ENV
-
-      - name: Verify kernel build
-        run: |
-          if [ ! -f "$HOME/kernel/out/arch/arm64/boot/Image" ]; then
-            echo "Error: Kernel Image not found!"
-            exit 1
+          if [[ "${{ matrix.variant }}" == "WildKSU-SUSFS" ]]; then
+            git clone --depth=1 https://github.com/WildKernels/kernel_patches.git
           fi
-          echo "Kernel build successful!"
 
-      - name: Create zip
+      - name: Copy SUSFS and custom patch files
+        if: steps.selector.outputs.should_run == 'true' && matrix.susfs
         run: |
-          cd $HOME/AnyKernel3
-          cp $HOME/kernel/out/arch/arm64/boot/Image $HOME/AnyKernel3/
-          7z a "${{ env.KERNEL_NAME }}.zip" . -xr!*.git*
+          set -euo pipefail
+          cp "$HOME/susfs4ksu/kernel_patches/50_add_susfs_in_gki-android13-5.15.patch" "$GITHUB_WORKSPACE/"
+          cp "$HOME/susfs4ksu/kernel_patches/fs/"* "$GITHUB_WORKSPACE/fs/"
+          cp "$HOME/susfs4ksu/kernel_patches/include/linux/"* "$GITHUB_WORKSPACE/include/linux/"
+          cp "$HOME/a54x_kernel_patches/susfs/2.0.0/"* "$GITHUB_WORKSPACE/"
+          cp "$HOME/a54x_kernel_patches/susfs/2.1.0/open-ksu.patch" "$GITHUB_WORKSPACE/"
 
-      - name: Publish to GitHub
-        uses: softprops/action-gh-release@v2
-        with:
-          files: /home/runner/AnyKernel3/*.zip
-          name: DΛG Kernels - ${{ env.DATE }}
-          tag_name: "${{ env.DATE }}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  build_ksu:
-    name: Build KSU Kernel
-    needs: [notify-start]
-    runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.variant == 'All variants' || github.event.inputs.variant == 'KSU' }}
-    
-    steps:
-      - name: Checkout DΛG branch
-        uses: actions/checkout@v4
-        with:
-          ref: 'DΛG'
-
-      - name: Download Apache Arrow's util_free_space.sh
-        run: |
-          curl -L -o util_free_space.sh https://raw.githubusercontent.com/apache/arrow/main/ci/scripts/util_free_space.sh
-          chmod +x util_free_space.sh
-          ./util_free_space.sh
-
-      - name: Install dependencies
-        run: |
-          sudo apt update && sudo apt install -y git device-tree-compiler lz4 xz-utils zlib1g-dev openjdk-17-jdk gcc g++ python3 python-is-python3 p7zip-full android-sdk-libsparse-utils erofs-utils \
-          default-jdk git gnupg flex bison gperf build-essential zip curl libc6-dev libncurses-dev libx11-dev libreadline-dev libgl1 libgl1-mesa-dev \
-          python3 make sudo gcc g++ bc grep tofrodos python3-markdown libxml2-utils xsltproc zlib1g-dev python-is-python3 libc6-dev libtinfo6 \
-          make repo cpio kmod openssl libelf-dev pahole libssl-dev libarchive-tools zstd rsync --fix-missing && \
-          wget http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb && \
-          sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb && \
-          rm libtinfo5_6.3-2ubuntu0.1_amd64.deb
-      
-      - name: Make directories
-        run: |
-          mkdir -p $HOME/kernel
-          mkdir -p $HOME/toolchain
-          mkdir -p $HOME/toolchain/clang-r450784c
-
-      - name: Cache toolchain
-        id: cache-toolchain
-        uses: actions/cache@v4
-        with:
-          path: $HOME/toolchain/clang-r450784c
-          key: clang-r450784c-toolchain
-
-      - name: Fetch toolchain
-        if: steps.cache-toolchain.outputs.cache-hit != 'true'
-        run: |
-          wget -c https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/llvm-r450784/clang-r450784c.tar.gz -O clang.tar.gz
-          tar -xf clang.tar.gz -C $HOME/toolchain/clang-r450784c && rm -rf clang.tar.gz
-        
-      - name: Fetch AnyKernel3
-        run: |
-          git clone --branch a54x https://github.com/daglaroglou/AnyKernel3.git $HOME/AnyKernel3
-
-      - name: Fetch kernel source
-        run: |
-          git clone https://github.com/daglaroglou/android_kernel_samsung_a54x $HOME/kernel
-
-      - name: Login actions bot
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Set date
-        run: |
-          echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
-
-      - name: Import KernelSU driver
-        run: |
-          cd $HOME/kernel
-          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
-
-      - name: Set config variables for KernelSU
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_KSU
-
-      - name: Set config variables for Mountify
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_TMPFS_XATTR \
-            --enable CONFIG_TMPFS_POSIX_ACL
-
-      - name: Set config variable for Localversion
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --set-str CONFIG_LOCALVERSION "-DΛG-KSU" \
-            --set-val CONFIG_LOCALVERSION_AUTO n
-
-      - name: Build kernel
-        run: |
-          cd $HOME/kernel
-          export PATH="$HOME/toolchain/clang-r450784c/bin:$PATH"
-          export CONFIGS="a54x_defconfig custom.config"
-          export KERNEL_DIR=$HOME/kernel
-          export KBUILD_BUILD_HOST="Github-Actions"
-          export KBUILD_BUILD_USER="daglaroglou"
-          export PLATFORM_VERSION=16
-          export TARGET_SOC=s5e8835
-          export DEPMOD=depmod
-          MAKE_PARAMS="-j$(nproc --all) ARCH=arm64 KBUILD_OUTPUT=$HOME/kernel/out CC=clang LLVM=1 LLVM_IAS=1 CLANG_TRIPLE=llvm- CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-"
-          make $MAKE_PARAMS $CONFIGS
-          make $MAKE_PARAMS
-
-      - name: Extract version info
-        run: |
-          cd $HOME/kernel
-          LOCALVERSION=$(grep "CONFIG_LOCALVERSION=" arch/arm64/configs/custom.config | cut -d'=' -f2 | tr -d '"')
-          echo "LOCALVERSION=$LOCALVERSION" >> $GITHUB_ENV
-          KERNEL_NAME_RAW="${LOCALVERSION#-}"
-          KERNEL_NAME_RELEASE="${KERNEL_NAME_RAW//Λ/A}"
-          echo "KERNEL_NAME=$KERNEL_NAME_RELEASE" >> $GITHUB_ENV
-
-      - name: Verify kernel build
-        run: |
-          if [ ! -f "$HOME/kernel/out/arch/arm64/boot/Image" ]; then
-            echo "Error: Kernel Image not found!"
-            exit 1
+          if [[ "${{ matrix.variant }}" == "KSU-SUSFS" ]]; then
+            cp "$HOME/susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" "$GITHUB_WORKSPACE/KernelSU/"
           fi
-          echo "Kernel build successful!"
 
-      - name: Create zip
+      - name: Apply SUSFS patch chain
+        if: steps.selector.outputs.should_run == 'true' && matrix.susfs
         run: |
-          cd $HOME/AnyKernel3
-          cp $HOME/kernel/out/arch/arm64/boot/Image $HOME/AnyKernel3/
-          7z a "${{ env.KERNEL_NAME }}.zip" . -xr!*.git*
-
-      - name: Publish to GitHub
-        uses: softprops/action-gh-release@v2
-        with:
-          files: /home/runner/AnyKernel3/*.zip
-          name: DΛG Kernels - ${{ env.DATE }}
-          tag_name: "${{ env.DATE }}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  
-  build_ksun:
-    name: Build KSUN Kernel
-    needs: [notify-start]
-    runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.variant == 'All variants' || github.event.inputs.variant == 'KSUN' }}
-    
-    steps:
-      - name: Checkout DΛG branch
-        uses: actions/checkout@v4
-        with:
-          ref: 'DΛG'
-
-      - name: Download Apache Arrow's util_free_space.sh
-        run: |
-          curl -L -o util_free_space.sh https://raw.githubusercontent.com/apache/arrow/main/ci/scripts/util_free_space.sh
-          chmod +x util_free_space.sh
-          ./util_free_space.sh
-
-      - name: Install dependencies
-        run: |
-          sudo apt update && sudo apt install -y git device-tree-compiler lz4 xz-utils zlib1g-dev openjdk-17-jdk gcc g++ python3 python-is-python3 p7zip-full android-sdk-libsparse-utils erofs-utils \
-          default-jdk git gnupg flex bison gperf build-essential zip curl libc6-dev libncurses-dev libx11-dev libreadline-dev libgl1 libgl1-mesa-dev \
-          python3 make sudo gcc g++ bc grep tofrodos python3-markdown libxml2-utils xsltproc zlib1g-dev python-is-python3 libc6-dev libtinfo6 \
-          make repo cpio kmod openssl libelf-dev pahole libssl-dev libarchive-tools zstd rsync --fix-missing && \
-          wget http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb && \
-          sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb && \
-          rm libtinfo5_6.3-2ubuntu0.1_amd64.deb
-      
-      - name: Make directories
-        run: |
-          mkdir -p $HOME/kernel
-          mkdir -p $HOME/toolchain
-          mkdir -p $HOME/toolchain/clang-r450784c
-
-      - name: Cache toolchain
-        id: cache-toolchain
-        uses: actions/cache@v4
-        with:
-          path: $HOME/toolchain/clang-r450784c
-          key: clang-r450784c-toolchain
-
-      - name: Fetch toolchain
-        if: steps.cache-toolchain.outputs.cache-hit != 'true'
-        run: |
-          wget -c https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/llvm-r450784/clang-r450784c.tar.gz -O clang.tar.gz
-          tar -xf clang.tar.gz -C $HOME/toolchain/clang-r450784c && rm -rf clang.tar.gz
-        
-      - name: Fetch AnyKernel3
-        run: |
-          git clone --branch a54x https://github.com/daglaroglou/AnyKernel3.git $HOME/AnyKernel3
-
-      - name: Fetch kernel source
-        run: |
-          git clone https://github.com/daglaroglou/android_kernel_samsung_a54x $HOME/kernel
-
-      - name: Login actions bot
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Set date
-        run: |
-          echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
-
-      - name: Import KernelSU Next driver
-        run: |
-          cd $HOME/kernel
-          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s dev
-
-      - name: Set config variables for KernelSU Next
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_KSU \
-            --enable CONFIG_KPROBES
-
-      - name: Set config variables for Mountify
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_TMPFS_XATTR \
-            --enable CONFIG_TMPFS_POSIX_ACL
-
-      - name: Set config variable for Localversion
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --set-str CONFIG_LOCALVERSION "-DΛG-KSUN" \
-            --set-val CONFIG_LOCALVERSION_AUTO n
-
-      - name: Build kernel
-        run: |
-          cd $HOME/kernel
-          export PATH="$HOME/toolchain/clang-r450784c/bin:$PATH"
-          export CONFIGS="a54x_defconfig custom.config"
-          export KERNEL_DIR=$HOME/kernel
-          export KBUILD_BUILD_HOST="Github-Actions"
-          export KBUILD_BUILD_USER="daglaroglou"
-          export PLATFORM_VERSION=16
-          export TARGET_SOC=s5e8835
-          export DEPMOD=depmod
-          MAKE_PARAMS="-j$(nproc --all) ARCH=arm64 KBUILD_OUTPUT=$HOME/kernel/out CC=clang LLVM=1 LLVM_IAS=1 CLANG_TRIPLE=llvm- CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-"
-          make $MAKE_PARAMS $CONFIGS
-          make $MAKE_PARAMS
-
-      - name: Extract version info
-        run: |
-          cd $HOME/kernel
-          LOCALVERSION=$(grep "CONFIG_LOCALVERSION=" arch/arm64/configs/custom.config | cut -d'=' -f2 | tr -d '"')
-          echo "LOCALVERSION=$LOCALVERSION" >> $GITHUB_ENV
-          KERNEL_NAME_RAW="${LOCALVERSION#-}"
-          KERNEL_NAME_RELEASE="${KERNEL_NAME_RAW//Λ/A}"
-          echo "KERNEL_NAME=$KERNEL_NAME_RELEASE" >> $GITHUB_ENV
-
-      - name: Verify kernel build
-        run: |
-          if [ ! -f "$HOME/kernel/out/arch/arm64/boot/Image" ]; then
-            echo "Error: Kernel Image not found!"
-            exit 1
-          fi
-          echo "Kernel build successful!"
-
-      - name: Create zip
-        run: |
-          cd $HOME/AnyKernel3
-          cp $HOME/kernel/out/arch/arm64/boot/Image $HOME/AnyKernel3/
-          7z a "${{ env.KERNEL_NAME }}.zip" . -xr!*.git*
-
-      - name: Publish to GitHub
-        uses: softprops/action-gh-release@v2
-        with:
-          files: /home/runner/AnyKernel3/*.zip
-          name: DΛG Kernels - ${{ env.DATE }}
-          tag_name: "${{ env.DATE }}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  build_sukisu:
-    name: Build SukiSU Kernel
-    needs: [notify-start]
-    runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.variant == 'All variants' || github.event.inputs.variant == 'SukiSU' }}
-    
-    steps:
-      - name: Checkout DΛG branch
-        uses: actions/checkout@v4
-        with:
-          ref: 'DΛG'
-
-      - name: Download Apache Arrow's util_free_space.sh
-        run: |
-          curl -L -o util_free_space.sh https://raw.githubusercontent.com/apache/arrow/main/ci/scripts/util_free_space.sh
-          chmod +x util_free_space.sh
-          ./util_free_space.sh
-
-      - name: Install dependencies
-        run: |
-          sudo apt update && sudo apt install -y git device-tree-compiler lz4 xz-utils zlib1g-dev openjdk-17-jdk gcc g++ python3 python-is-python3 p7zip-full android-sdk-libsparse-utils erofs-utils \
-          default-jdk git gnupg flex bison gperf build-essential zip curl libc6-dev libncurses-dev libx11-dev libreadline-dev libgl1 libgl1-mesa-dev \
-          python3 make sudo gcc g++ bc grep tofrodos python3-markdown libxml2-utils xsltproc zlib1g-dev python-is-python3 libc6-dev libtinfo6 \
-          make repo cpio kmod openssl libelf-dev pahole libssl-dev libarchive-tools zstd rsync --fix-missing && \
-          wget http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb && \
-          sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb && \
-          rm libtinfo5_6.3-2ubuntu0.1_amd64.deb
-      
-      - name: Make directories
-        run: |
-          mkdir -p $HOME/kernel
-          mkdir -p $HOME/toolchain
-          mkdir -p $HOME/toolchain/clang-r450784c
-
-      - name: Cache toolchain
-        id: cache-toolchain
-        uses: actions/cache@v4
-        with:
-          path: $HOME/toolchain/clang-r450784c
-          key: clang-r450784c-toolchain
-
-      - name: Fetch toolchain
-        if: steps.cache-toolchain.outputs.cache-hit != 'true'
-        run: |
-          wget -c https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/llvm-r450784/clang-r450784c.tar.gz -O clang.tar.gz
-          tar -xf clang.tar.gz -C $HOME/toolchain/clang-r450784c && rm -rf clang.tar.gz
-        
-      - name: Fetch AnyKernel3
-        run: |
-          git clone --branch a54x https://github.com/daglaroglou/AnyKernel3.git $HOME/AnyKernel3
-
-      - name: Fetch kernel source
-        run: |
-          git clone https://github.com/daglaroglou/android_kernel_samsung_a54x $HOME/kernel
-
-      - name: Login actions bot
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Set date
-        run: |
-          echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
-
-      - name: Import SukiSU driver
-        run: |
-          cd $HOME/kernel
-          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s main
-
-      - name: Set config variables for SukiSU
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_KSU \
-            --enable CONFIG_KPM
-
-      - name: Set config variables for Mountify
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_TMPFS_XATTR \
-            --enable CONFIG_TMPFS_POSIX_ACL
-
-      - name: Set config variable for Localversion
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --set-str CONFIG_LOCALVERSION "-DΛG-SUKISU" \
-            --set-val CONFIG_LOCALVERSION_AUTO n
-
-      - name: Build kernel
-        run: |
-          cd $HOME/kernel
-          export PATH="$HOME/toolchain/clang-r450784c/bin:$PATH"
-          export CONFIGS="a54x_defconfig custom.config"
-          export KERNEL_DIR=$HOME/kernel
-          export KBUILD_BUILD_HOST="Github-Actions"
-          export KBUILD_BUILD_USER="daglaroglou"
-          export PLATFORM_VERSION=16
-          export TARGET_SOC=s5e8835
-          export DEPMOD=depmod
-          MAKE_PARAMS="-j$(nproc --all) ARCH=arm64 KBUILD_OUTPUT=$HOME/kernel/out CC=clang LLVM=1 LLVM_IAS=1 CLANG_TRIPLE=llvm- CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-"
-          make $MAKE_PARAMS $CONFIGS
-          make $MAKE_PARAMS
-
-      - name: Extract version info
-        run: |
-          cd $HOME/kernel
-          LOCALVERSION=$(grep "CONFIG_LOCALVERSION=" arch/arm64/configs/custom.config | cut -d'=' -f2 | tr -d '"')
-          echo "LOCALVERSION=$LOCALVERSION" >> $GITHUB_ENV
-          KERNEL_NAME_RAW="${LOCALVERSION#-}"
-          KERNEL_NAME_RELEASE="${KERNEL_NAME_RAW//Λ/A}"
-          echo "KERNEL_NAME=$KERNEL_NAME_RELEASE" >> $GITHUB_ENV
-
-      - name: Verify kernel build
-        run: |
-          if [ ! -f "$HOME/kernel/out/arch/arm64/boot/Image" ]; then
-            echo "Error: Kernel Image not found!"
-            exit 1
-          fi
-          echo "Kernel build successful!"
-
-      - name: Create zip
-        run: |
-          cd $HOME/AnyKernel3
-          cp $HOME/kernel/out/arch/arm64/boot/Image $HOME/AnyKernel3/
-          7z a "${{ env.KERNEL_NAME }}.zip" . -xr!*.git*
-
-      - name: Publish to GitHub
-        uses: softprops/action-gh-release@v2
-        with:
-          files: /home/runner/AnyKernel3/*.zip
-          name: DΛG Kernels - ${{ env.DATE }}
-          tag_name: "${{ env.DATE }}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  build_wildksu:
-    name: Build WildKSU Kernel
-    needs: [notify-start]
-    runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.variant == 'All variants' || github.event.inputs.variant == 'WildKSU' }}
-    
-    steps:
-      - name: Checkout DΛG branch
-        uses: actions/checkout@v4
-        with:
-          ref: 'DΛG'
-
-      - name: Download Apache Arrow's util_free_space.sh
-        run: |
-          curl -L -o util_free_space.sh https://raw.githubusercontent.com/apache/arrow/main/ci/scripts/util_free_space.sh
-          chmod +x util_free_space.sh
-          ./util_free_space.sh
-
-      - name: Install dependencies
-        run: |
-          sudo apt update && sudo apt install -y git device-tree-compiler lz4 xz-utils zlib1g-dev openjdk-17-jdk gcc g++ python3 python-is-python3 p7zip-full android-sdk-libsparse-utils erofs-utils \
-          default-jdk git gnupg flex bison gperf build-essential zip curl libc6-dev libncurses-dev libx11-dev libreadline-dev libgl1 libgl1-mesa-dev \
-          python3 make sudo gcc g++ bc grep tofrodos python3-markdown libxml2-utils xsltproc zlib1g-dev python-is-python3 libc6-dev libtinfo6 \
-          make repo cpio kmod openssl libelf-dev pahole libssl-dev libarchive-tools zstd rsync --fix-missing && \
-          wget http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb && \
-          sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb && \
-          rm libtinfo5_6.3-2ubuntu0.1_amd64.deb
-      
-      - name: Make directories
-        run: |
-          mkdir -p $HOME/kernel
-          mkdir -p $HOME/toolchain
-          mkdir -p $HOME/toolchain/clang-r450784c
-
-      - name: Cache toolchain
-        id: cache-toolchain
-        uses: actions/cache@v4
-        with:
-          path: $HOME/toolchain/clang-r450784c
-          key: clang-r450784c-toolchain
-
-      - name: Fetch toolchain
-        if: steps.cache-toolchain.outputs.cache-hit != 'true'
-        run: |
-          wget -c https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/llvm-r450784/clang-r450784c.tar.gz -O clang.tar.gz
-          tar -xf clang.tar.gz -C $HOME/toolchain/clang-r450784c && rm -rf clang.tar.gz
-        
-      - name: Fetch AnyKernel3
-        run: |
-          git clone --branch a54x https://github.com/daglaroglou/AnyKernel3.git $HOME/AnyKernel3
-
-      - name: Fetch kernel source
-        run: |
-          git clone https://github.com/daglaroglou/android_kernel_samsung_a54x $HOME/kernel
-
-      - name: Login actions bot
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Set date
-        run: |
-          echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
-
-      - name: Import WildKSU driver
-        run: |
-          cd $HOME/kernel
-          curl -LSs "https://raw.githubusercontent.com/WildKernels/Wild_KSU/wild/kernel/setup.sh" | bash -s wild
-
-      - name: Set config variables for WildKSU
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_KSU \
-            --enable CONFIG_KPROBES
-
-      - name: Import SUSFS
-        run: |
-          cd $HOME
-          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android13-5.15
-
-      - name: Fetch kernel patches
-        run: |
-          cd $HOME
-          git clone https://github.com/daglaroglou/a54x_kernel_patches.git
-          git clone https://github.com/WildKernels/kernel_patches.git
-
-      - name: Copy SUSFS files
-        run: |
-          cd $HOME/susfs4ksu
-          cp kernel_patches/50_add_susfs_in_gki-android13-5.15.patch $HOME/kernel/
-          cp kernel_patches/fs/* $HOME/kernel/fs/
-          cp kernel_patches/include/linux/* $HOME/kernel/include/linux/
-
-      - name: Copy kernel patches
-        run: |
-          cd $HOME/a54x_kernel_patches
-          cp susfs/2.0.0/* $HOME/kernel/
-
-          cd $HOME/a54x_kernel_patches
-          cp wild/* $HOME/kernel/
-
-      - name: Apply patches
-        run: |
-          set +e
-          cd $HOME/kernel
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
           patch -p1 < 50_add_susfs_in_gki-android13-5.15.patch
           patch -p1 < exec.patch
           patch -p1 < namespace.patch
           patch -p1 < base.patch
-          
-          cd $HOME/kernel/Wild_KSU
-          patch -p1 < apk_sign.patch
-          set -e
+          patch -p1 < open-ksu.patch
 
-      - name: Set config variables for SUSFS
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --set-val CONFIG_KSU_SUSFS n \
-            --set-val CONFIG_KSU_SUSFS_SUS_PATH n \
-            --set-val CONFIG_KSU_SUSFS_SUS_MOUNT n \
-            --set-val CONFIG_KSU_SUSFS_SUS_KSTAT n \
-            --set-val CONFIG_KSU_SUSFS_SPOOF_UNAME n \
-            --set-val CONFIG_KSU_SUSFS_ENABLE_LOG n \
-            --set-val CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS n \
-            --set-val CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG n \
-            --set-val CONFIG_KSU_SUSFS_OPEN_REDIRECT n
+          if [[ "${{ matrix.variant }}" == "KSU-SUSFS" ]]; then
+            cd "$GITHUB_WORKSPACE/KernelSU"
+            patch -p1 < 10_enable_susfs_for_ksu.patch
+          fi
 
-      - name: Set config variables for Mountify
+          if [[ "${{ matrix.variant }}" == "WildKSU-SUSFS" ]]; then
+            cd "$GITHUB_WORKSPACE/Wild_KSU"
+            wget https://raw.githubusercontent.com/WildKernels/kernel_patches/refs/heads/main/next/susfs_fix_patches/stable/v2.1.0/multi_manager.patch
+            patch -p1 < multi_manager.patch
+          fi
+
+      - name: Configure SUSFS option
+        if: steps.selector.outputs.should_run == 'true' && matrix.susfs
         run: |
-          cd $HOME/kernel
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_KSU_SUSFS
+
+      - name: Configure Mountify options
+        if: steps.selector.outputs.should_run == 'true'
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
           ./scripts/config --file arch/arm64/configs/custom.config \
             --enable CONFIG_TMPFS_XATTR \
             --enable CONFIG_TMPFS_POSIX_ACL
 
-      - name: Set config variable for Localversion
+      - name: Configure localversion
+        if: steps.selector.outputs.should_run == 'true'
         run: |
-          cd $HOME/kernel
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
           ./scripts/config --file arch/arm64/configs/custom.config \
-            --set-str CONFIG_LOCALVERSION "-DΛG-WILDKSU" \
+            --set-str CONFIG_LOCALVERSION "${{ matrix.localversion }}" \
             --set-val CONFIG_LOCALVERSION_AUTO n
 
       - name: Build kernel
+        if: steps.selector.outputs.should_run == 'true'
         run: |
-          cd $HOME/kernel
-          export PATH="$HOME/toolchain/clang-r450784c/bin:$PATH"
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          export PATH="$TOOLCHAIN_DIR/bin:$PATH"
           export CONFIGS="a54x_defconfig custom.config"
-          export KERNEL_DIR=$HOME/kernel
+          export KERNEL_DIR="$GITHUB_WORKSPACE"
           export KBUILD_BUILD_HOST="Github-Actions"
           export KBUILD_BUILD_USER="daglaroglou"
           export PLATFORM_VERSION=16
           export TARGET_SOC=s5e8835
           export DEPMOD=depmod
-          MAKE_PARAMS="-j$(nproc --all) ARCH=arm64 KBUILD_OUTPUT=$HOME/kernel/out CC=clang LLVM=1 LLVM_IAS=1 CLANG_TRIPLE=llvm- CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-"
+          MAKE_PARAMS="-j$(nproc --all) ARCH=arm64 KBUILD_OUTPUT=$GITHUB_WORKSPACE/out CC=clang LLVM=1 LLVM_IAS=1 CLANG_TRIPLE=llvm- CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-"
           make $MAKE_PARAMS $CONFIGS
           make $MAKE_PARAMS
 
-      - name: Extract version info
-        run: |
-          cd $HOME/kernel
-          LOCALVERSION=$(grep "CONFIG_LOCALVERSION=" arch/arm64/configs/custom.config | cut -d'=' -f2 | tr -d '"')
-          echo "LOCALVERSION=$LOCALVERSION" >> $GITHUB_ENV
-          KERNEL_NAME_RAW="${LOCALVERSION#-}"
-          KERNEL_NAME_RELEASE="${KERNEL_NAME_RAW//Λ/A}"
-          echo "KERNEL_NAME=$KERNEL_NAME_RELEASE" >> $GITHUB_ENV
-
       - name: Verify kernel build
+        if: steps.selector.outputs.should_run == 'true'
         run: |
-          if [ ! -f "$HOME/kernel/out/arch/arm64/boot/Image" ]; then
+          set -euo pipefail
+          IMAGE_PATH="$GITHUB_WORKSPACE/out/arch/arm64/boot/Image"
+          if [[ ! -f "$IMAGE_PATH" ]]; then
             echo "Error: Kernel Image not found!"
             exit 1
           fi
-          echo "Kernel build successful!"
+          ls -la "$IMAGE_PATH"
 
       - name: Create zip
+        if: steps.selector.outputs.should_run == 'true'
         run: |
-          cd $HOME/AnyKernel3
-          cp $HOME/kernel/out/arch/arm64/boot/Image $HOME/AnyKernel3/
-          7z a "${{ env.KERNEL_NAME }}.zip" . -xr!*.git*
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          KERNEL_NAME_RAW="${{ matrix.localversion }}"
+          KERNEL_NAME_RAW="${KERNEL_NAME_RAW#-}"
+          KERNEL_NAME_RELEASE="${KERNEL_NAME_RAW//Λ/A}"
 
-      - name: Publish to GitHub
-        uses: softprops/action-gh-release@v2
+          cp "$GITHUB_WORKSPACE/out/arch/arm64/boot/Image" "$HOME/AnyKernel3/"
+          cd "$HOME/AnyKernel3"
+          7z a "${KERNEL_NAME_RELEASE}.zip" . -xr'!*.git*'
+
+      - name: Upload zipped kernel artifact
+        if: steps.selector.outputs.should_run == 'true'
+        uses: actions/upload-artifact@v4
         with:
-          files: /home/runner/AnyKernel3/*.zip
-          name: DΛG Kernels - ${{ env.DATE }}
-          tag_name: "${{ env.DATE }}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: kernel-${{ matrix.variant }}
+          path: $HOME/AnyKernel3/*.zip
+          if-no-files-found: error
+          retention-days: 7
 
-  build_ksu_susfs:
-    name: Build KSU-SUSFS Kernel
-    needs: [notify-start]
+  publish-release:
+    name: Publish GitHub Release
+    needs: [notify-start, build]
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.variant == 'All variants' || github.event.inputs.variant == 'KSU-SUSFS' }}
-    
+    if: always()
     steps:
       - name: Checkout DΛG branch
         uses: actions/checkout@v4
         with:
-          ref: 'DΛG'
-
-      - name: Download Apache Arrow's util_free_space.sh
-        run: |
-          curl -L -o util_free_space.sh https://raw.githubusercontent.com/apache/arrow/main/ci/scripts/util_free_space.sh
-          chmod +x util_free_space.sh
-          ./util_free_space.sh
-
-      - name: Install dependencies
-        run: |
-          sudo apt update && sudo apt install -y git device-tree-compiler lz4 xz-utils zlib1g-dev openjdk-17-jdk gcc g++ python3 python-is-python3 p7zip-full android-sdk-libsparse-utils erofs-utils \
-          default-jdk git gnupg flex bison gperf build-essential zip curl libc6-dev libncurses-dev libx11-dev libreadline-dev libgl1 libgl1-mesa-dev \
-          python3 make sudo gcc g++ bc grep tofrodos python3-markdown libxml2-utils xsltproc zlib1g-dev python-is-python3 libc6-dev libtinfo6 \
-          make repo cpio kmod openssl libelf-dev pahole libssl-dev libarchive-tools zstd rsync --fix-missing && \
-          wget http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb && \
-          sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb && \
-          rm libtinfo5_6.3-2ubuntu0.1_amd64.deb
-      
-      - name: Make directories
-        run: |
-          mkdir -p $HOME/kernel
-          mkdir -p $HOME/toolchain
-          mkdir -p $HOME/toolchain/clang-r450784c
-
-      - name: Cache toolchain
-        id: cache-toolchain
-        uses: actions/cache@v4
-        with:
-          path: $HOME/toolchain/clang-r450784c
-          key: clang-r450784c-toolchain
-
-      - name: Fetch toolchain
-        if: steps.cache-toolchain.outputs.cache-hit != 'true'
-        run: |
-          wget -c https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/llvm-r450784/clang-r450784c.tar.gz -O clang.tar.gz
-          tar -xf clang.tar.gz -C $HOME/toolchain/clang-r450784c && rm -rf clang.tar.gz
-        
-      - name: Fetch AnyKernel3
-        run: |
-          git clone --branch a54x https://github.com/daglaroglou/AnyKernel3.git $HOME/AnyKernel3
-
-      - name: Fetch kernel source
-        run: |
-          git clone https://github.com/daglaroglou/android_kernel_samsung_a54x $HOME/kernel
-
-      - name: Login actions bot
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          ref: "DΛG"
 
       - name: Set date
-        run: |
-          echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+        id: date
+        run: echo "DATE=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
 
-      - name: Import KernelSU driver
+      - name: Read CHANGELOG.md
+        id: changelog
         run: |
-          cd $HOME/kernel
-          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
+          CHANGELOG=$(cat CHANGELOG.md)
+          echo "CHANGELOG<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$CHANGELOG" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
 
-      - name: Set config variables for KernelSU
+      - name: Fetch kernel manager versions
+        id: versions
         run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_KSU
-      
-      - name: Import SUSFS
-        run: |
-          cd $HOME
-          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android13-5.15
+          KSU_VERSION=$(curl -s https://api.github.com/repos/tiann/KernelSU/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "KSU_VERSION=$KSU_VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Fetch kernel patches
-        run: |
-          cd $HOME
-          git clone https://github.com/daglaroglou/a54x_kernel_patches.git
+          KSUN_VERSION=$(curl -s https://api.github.com/repos/KernelSU-Next/KernelSU-Next/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "KSUN_VERSION=$KSUN_VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Copy SUSFS files
-        run: |
-          cd $HOME/susfs4ksu
-          cp kernel_patches/50_add_susfs_in_gki-android13-5.15.patch $HOME/kernel/
-          cp kernel_patches/fs/* $HOME/kernel/fs/
-          cp kernel_patches/include/linux/* $HOME/kernel/include/linux/
-          cp kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch $HOME/kernel/KernelSU/
+          RESUKISU_VERSION=$(curl -s https://api.github.com/repos/ReSukiSU/ReSukiSU/tags | grep '"name":' | sed -E 's/.*"([^"]+)".*/\1/' | head -1)
+          echo "RESUKISU_VERSION=$RESUKISU_VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Copy kernel patches
-        run: |
-          cd $HOME/a54x_kernel_patches
-          cp susfs/2.0.0/* $HOME/kernel/
+          WILDKSU_VERSION=$(curl -s https://api.github.com/repos/WildKernels/Wild_KSU/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "WILDKSU_VERSION=$WILDKSU_VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Apply patches
-        run: |
-          set +e
-          cd $HOME/kernel
-          patch -p1 < 50_add_susfs_in_gki-android13-5.15.patch
-          patch -p1 < exec.patch
-          patch -p1 < namespace.patch
-          patch -p1 < base.patch
-          cd KernelSU
-          patch -p1 < 10_enable_susfs_for_ksu.patch
-          set -e
+      - name: Download all kernel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: kernel-*
+          path: /home/runner/release
+          merge-multiple: true
 
-      - name: Set config variables for SUSFS
+      - name: Verify downloaded artifacts
         run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_KSU_SUSFS \
-            --enable CONFIG_KSU_SUSFS_SUS_PATH \
-            --enable CONFIG_KSU_SUSFS_SUS_MOUNT \
-            --enable CONFIG_KSU_SUSFS_SUS_KSTAT \
-            --enable CONFIG_KSU_SUSFS_SPOOF_UNAME \
-            --enable CONFIG_KSU_SUSFS_ENABLE_LOG \
-            --enable CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS \
-            --enable CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG \
-            --enable CONFIG_KSU_SUSFS_OPEN_REDIRECT
-
-      - name: Set config variables for Mountify
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_TMPFS_XATTR \
-            --enable CONFIG_TMPFS_POSIX_ACL
-
-      - name: Set config variable for Localversion
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --set-str CONFIG_LOCALVERSION "-DΛG-KSU_SUSFS" \
-            --set-val CONFIG_LOCALVERSION_AUTO n
-
-      - name: Build kernel
-        run: |
-          cd $HOME/kernel
-          export PATH="$HOME/toolchain/clang-r450784c/bin:$PATH"
-          export CONFIGS="a54x_defconfig custom.config"
-          export KERNEL_DIR=$HOME/kernel
-          export KBUILD_BUILD_HOST="Github-Actions"
-          export KBUILD_BUILD_USER="daglaroglou"
-          export PLATFORM_VERSION=16
-          export TARGET_SOC=s5e8835
-          export DEPMOD=depmod
-          MAKE_PARAMS="-j$(nproc --all) ARCH=arm64 KBUILD_OUTPUT=$HOME/kernel/out CC=clang LLVM=1 LLVM_IAS=1 CLANG_TRIPLE=llvm- CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-"
-          make $MAKE_PARAMS $CONFIGS
-          make $MAKE_PARAMS
-
-      - name: Extract version info
-        run: |
-          cd $HOME/kernel
-          LOCALVERSION=$(grep "CONFIG_LOCALVERSION=" arch/arm64/configs/custom.config | cut -d'=' -f2 | tr -d '"')
-          echo "LOCALVERSION=$LOCALVERSION" >> $GITHUB_ENV
-          KERNEL_NAME_RAW="${LOCALVERSION#-}"
-          KERNEL_NAME_RELEASE="${KERNEL_NAME_RAW//Λ/A}"
-          echo "KERNEL_NAME=$KERNEL_NAME_RELEASE" >> $GITHUB_ENV
-
-      - name: Verify kernel build
-        run: |
-          if [ ! -f "$HOME/kernel/out/arch/arm64/boot/Image" ]; then
-            echo "Error: Kernel Image not found!"
+          set -euo pipefail
+          ls -la /home/runner/release
+          shopt -s nullglob
+          files=(/home/runner/release/*.zip)
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "No kernel zips found to publish."
             exit 1
           fi
-          echo "Kernel build successful!"
-
-      - name: Create zip
-        run: |
-          cd $HOME/AnyKernel3
-          cp $HOME/kernel/out/arch/arm64/boot/Image $HOME/AnyKernel3/
-          7z a "${{ env.KERNEL_NAME }}.zip" . -xr!*.git*
 
       - name: Publish to GitHub
         uses: softprops/action-gh-release@v2
         with:
-          files: /home/runner/AnyKernel3/*.zip
-          name: DΛG Kernels - ${{ env.DATE }}
-          tag_name: "${{ env.DATE }}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  build_ksun_susfs:
-    name: Build KSUN-SUSFS Kernel
-    needs: [notify-start]
-    runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.variant == 'All variants' || github.event.inputs.variant == 'KSUN-SUSFS' }}
-    
-    steps:
-      - name: Checkout DΛG branch
-        uses: actions/checkout@v4
-        with:
-          ref: 'DΛG'
-
-      - name: Download Apache Arrow's util_free_space.sh
-        run: |
-          curl -L -o util_free_space.sh https://raw.githubusercontent.com/apache/arrow/main/ci/scripts/util_free_space.sh
-          chmod +x util_free_space.sh
-          ./util_free_space.sh
-
-      - name: Install dependencies
-        run: |
-          sudo apt update && sudo apt install -y git device-tree-compiler lz4 xz-utils zlib1g-dev openjdk-17-jdk gcc g++ python3 python-is-python3 p7zip-full android-sdk-libsparse-utils erofs-utils \
-          default-jdk git gnupg flex bison gperf build-essential zip curl libc6-dev libncurses-dev libx11-dev libreadline-dev libgl1 libgl1-mesa-dev \
-          python3 make sudo gcc g++ bc grep tofrodos python3-markdown libxml2-utils xsltproc zlib1g-dev python-is-python3 libc6-dev libtinfo6 \
-          make repo cpio kmod openssl libelf-dev pahole libssl-dev libarchive-tools zstd rsync --fix-missing && \
-          wget http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb && \
-          sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb && \
-          rm libtinfo5_6.3-2ubuntu0.1_amd64.deb
-      
-      - name: Make directories
-        run: |
-          mkdir -p $HOME/kernel
-          mkdir -p $HOME/toolchain
-          mkdir -p $HOME/toolchain/clang-r450784c
-
-      - name: Cache toolchain
-        id: cache-toolchain
-        uses: actions/cache@v4
-        with:
-          path: $HOME/toolchain/clang-r450784c
-          key: clang-r450784c-toolchain
-
-      - name: Fetch toolchain
-        if: steps.cache-toolchain.outputs.cache-hit != 'true'
-        run: |
-          wget -c https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/llvm-r450784/clang-r450784c.tar.gz -O clang.tar.gz
-          tar -xf clang.tar.gz -C $HOME/toolchain/clang-r450784c && rm -rf clang.tar.gz
-        
-      - name: Fetch AnyKernel3
-        run: |
-          git clone --branch a54x https://github.com/daglaroglou/AnyKernel3.git $HOME/AnyKernel3
-
-      - name: Fetch kernel source
-        run: |
-          git clone https://github.com/daglaroglou/android_kernel_samsung_a54x $HOME/kernel
-
-      - name: Login actions bot
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Set date
-        run: |
-          echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
-
-      - name: Import KernelSU Next driver by @pershoot
-        run: |
-          cd $HOME/kernel
-          curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/dev-susfs/kernel/setup.sh" | bash -s dev-susfs
-
-      - name: Set config variables for KernelSU Next
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_KSU \
-            --enable CONFIG_KPROBES \
-            --enable CONFIG_TRACEPOINTS
-
-      - name: Import SUSFS
-        run: |
-          cd $HOME
-          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android13-5.15
-
-      - name: Fetch kernel patches
-        run: |
-          cd $HOME
-          git clone https://github.com/daglaroglou/a54x_kernel_patches.git
-
-      - name: Copy SUSFS files
-        run: |
-          cd $HOME/susfs4ksu
-          cp kernel_patches/50_add_susfs_in_gki-android13-5.15.patch $HOME/kernel/
-          cp kernel_patches/fs/* $HOME/kernel/fs/
-          cp kernel_patches/include/linux/* $HOME/kernel/include/linux/
-
-      - name: Copy kernel patches
-        run: |
-          cd $HOME/a54x_kernel_patches
-          cp susfs/2.0.0/* $HOME/kernel/
-
-      - name: Apply patches
-        run: |
-          set +e
-          cd $HOME/kernel
-          patch -p1 < 50_add_susfs_in_gki-android13-5.15.patch
-          patch -p1 < exec.patch
-          patch -p1 < namespace.patch
-          patch -p1 < base.patch
-          set -e
-
-      - name: Set config variables for SUSFS
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_KSU_SUSFS \
-            --enable CONFIG_KSU_SUSFS_SUS_PATH \
-            --enable CONFIG_KSU_SUSFS_SUS_MOUNT \
-            --enable CONFIG_KSU_SUSFS_SUS_KSTAT \
-            --enable CONFIG_KSU_SUSFS_SPOOF_UNAME \
-            --enable CONFIG_KSU_SUSFS_ENABLE_LOG \
-            --enable CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS \
-            --enable CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG \
-            --enable CONFIG_KSU_SUSFS_OPEN_REDIRECT
-
-      - name: Set config variables for Mountify
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_TMPFS_XATTR \
-            --enable CONFIG_TMPFS_POSIX_ACL
-
-      - name: Set config variable for Localversion
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --set-str CONFIG_LOCALVERSION "-DΛG-KSUN_SUSFS" \
-            --set-val CONFIG_LOCALVERSION_AUTO n
-
-      - name: Build kernel
-        run: |
-          cd $HOME/kernel
-          export PATH="$HOME/toolchain/clang-r450784c/bin:$PATH"
-          export CONFIGS="a54x_defconfig custom.config"
-          export KERNEL_DIR=$HOME/kernel
-          export KBUILD_BUILD_HOST="Github-Actions"
-          export KBUILD_BUILD_USER="daglaroglou"
-          export PLATFORM_VERSION=16
-          export TARGET_SOC=s5e8835
-          export DEPMOD=depmod
-          MAKE_PARAMS="-j$(nproc --all) ARCH=arm64 KBUILD_OUTPUT=$HOME/kernel/out CC=clang LLVM=1 LLVM_IAS=1 CLANG_TRIPLE=llvm- CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-"
-          make $MAKE_PARAMS $CONFIGS
-          make $MAKE_PARAMS
-
-      - name: Extract version info
-        run: |
-          cd $HOME/kernel
-          LOCALVERSION=$(grep "CONFIG_LOCALVERSION=" arch/arm64/configs/custom.config | cut -d'=' -f2 | tr -d '"')
-          echo "LOCALVERSION=$LOCALVERSION" >> $GITHUB_ENV
-          KERNEL_NAME_RAW="${LOCALVERSION#-}"
-          KERNEL_NAME_RELEASE="${KERNEL_NAME_RAW//Λ/A}"
-          echo "KERNEL_NAME=$KERNEL_NAME_RELEASE" >> $GITHUB_ENV
-
-      - name: Verify kernel build
-        run: |
-          if [ ! -f "$HOME/kernel/out/arch/arm64/boot/Image" ]; then
-            echo "Error: Kernel Image not found!"
-            exit 1
-          fi
-          echo "Kernel build successful!"
-
-      - name: Create zip
-        run: |
-          cd $HOME/AnyKernel3
-          cp $HOME/kernel/out/arch/arm64/boot/Image $HOME/AnyKernel3/
-          7z a "${{ env.KERNEL_NAME }}.zip" . -xr!*.git*
-
-      - name: Publish to GitHub
-        uses: softprops/action-gh-release@v2
-        with:
-          files: /home/runner/AnyKernel3/*.zip
-          name: DΛG Kernels - ${{ env.DATE }}
-          tag_name: "${{ env.DATE }}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  build_sukisu_susfs:
-    name: Build SukiSU-SUSFS Kernel
-    needs: [notify-start]
-    runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.variant == 'All variants' || github.event.inputs.variant == 'SukiSU-SUSFS' }}
-    
-    steps:
-      - name: Checkout DΛG branch
-        uses: actions/checkout@v4
-        with:
-          ref: 'DΛG'
-
-      - name: Download Apache Arrow's util_free_space.sh
-        run: |
-          curl -L -o util_free_space.sh https://raw.githubusercontent.com/apache/arrow/main/ci/scripts/util_free_space.sh
-          chmod +x util_free_space.sh
-          ./util_free_space.sh
-
-      - name: Install dependencies
-        run: |
-          sudo apt update && sudo apt install -y git device-tree-compiler lz4 xz-utils zlib1g-dev openjdk-17-jdk gcc g++ python3 python-is-python3 p7zip-full android-sdk-libsparse-utils erofs-utils \
-          default-jdk git gnupg flex bison gperf build-essential zip curl libc6-dev libncurses-dev libx11-dev libreadline-dev libgl1 libgl1-mesa-dev \
-          python3 make sudo gcc g++ bc grep tofrodos python3-markdown libxml2-utils xsltproc zlib1g-dev python-is-python3 libc6-dev libtinfo6 \
-          make repo cpio kmod openssl libelf-dev pahole libssl-dev libarchive-tools zstd rsync --fix-missing && \
-          wget http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb && \
-          sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb && \
-          rm libtinfo5_6.3-2ubuntu0.1_amd64.deb
-      
-      - name: Make directories
-        run: |
-          mkdir -p $HOME/kernel
-          mkdir -p $HOME/toolchain
-          mkdir -p $HOME/toolchain/clang-r450784c
-
-      - name: Cache toolchain
-        id: cache-toolchain
-        uses: actions/cache@v4
-        with:
-          path: $HOME/toolchain/clang-r450784c
-          key: clang-r450784c-toolchain
-
-      - name: Fetch toolchain
-        if: steps.cache-toolchain.outputs.cache-hit != 'true'
-        run: |
-          wget -c https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/llvm-r450784/clang-r450784c.tar.gz -O clang.tar.gz
-          tar -xf clang.tar.gz -C $HOME/toolchain/clang-r450784c && rm -rf clang.tar.gz
-        
-      - name: Fetch AnyKernel3
-        run: |
-          git clone --branch a54x https://github.com/daglaroglou/AnyKernel3.git $HOME/AnyKernel3
-
-      - name: Fetch kernel source
-        run: |
-          git clone https://github.com/daglaroglou/android_kernel_samsung_a54x $HOME/kernel
-
-      - name: Login actions bot
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Set date
-        run: |
-          echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
-
-      - name: Import SukiSU driver
-        run: |
-          cd $HOME/kernel
-          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s tmp-builtin
-
-      - name: Set config variables for SukiSU
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_KSU \
-            --enable CONFIG_KSU_MANUAL_HOOK \
-            --enable CONFIG_KALLSYMS
-      
-      - name: Import SUSFS
-        run: |
-          cd $HOME
-          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android13-5.15
-
-      - name: Fetch kernel patches
-        run: |
-          cd $HOME
-          git clone https://github.com/daglaroglou/a54x_kernel_patches.git
-
-      - name: Copy SUSFS files
-        run: |
-          cd $HOME/susfs4ksu
-          cp kernel_patches/50_add_susfs_in_gki-android13-5.15.patch $HOME/kernel/
-          cp kernel_patches/fs/* $HOME/kernel/fs/
-          cp kernel_patches/include/linux/* $HOME/kernel/include/linux/
-
-      - name: Copy kernel patches
-        run: |
-          cd $HOME/a54x_kernel_patches
-          cp susfs/2.0.0/* $HOME/kernel/
-
-      - name: Apply patches
-        run: |
-          set +e
-          cd $HOME/kernel
-          patch -p1 < 50_add_susfs_in_gki-android13-5.15.patch
-          patch -p1 < exec.patch
-          patch -p1 < namespace.patch
-          patch -p1 < base.patch
-          set -e
-
-      - name: Set config variables for SUSFS
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_KSU_SUSFS \
-            --enable CONFIG_KSU_SUSFS_SUS_PATH \
-            --enable CONFIG_KSU_SUSFS_SUS_MOUNT \
-            --enable CONFIG_KSU_SUSFS_SUS_KSTAT \
-            --enable CONFIG_KSU_SUSFS_SPOOF_UNAME \
-            --enable CONFIG_KSU_SUSFS_ENABLE_LOG \
-            --enable CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS \
-            --enable CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG \
-            --enable CONFIG_KSU_SUSFS_OPEN_REDIRECT
-
-      - name: Set config variables for Mountify
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_TMPFS_XATTR \
-            --enable CONFIG_TMPFS_POSIX_ACL
-
-      - name: Set config variable for Localversion
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --set-str CONFIG_LOCALVERSION "-DΛG-SUKISU_SUSFS" \
-            --set-val CONFIG_LOCALVERSION_AUTO n
-
-      - name: Build kernel
-        run: |
-          cd $HOME/kernel
-          export PATH="$HOME/toolchain/clang-r450784c/bin:$PATH"
-          export CONFIGS="a54x_defconfig custom.config"
-          export KERNEL_DIR=$HOME/kernel
-          export KBUILD_BUILD_HOST="Github-Actions"
-          export KBUILD_BUILD_USER="daglaroglou"
-          export PLATFORM_VERSION=16
-          export TARGET_SOC=s5e8835
-          export DEPMOD=depmod
-          MAKE_PARAMS="-j$(nproc --all) ARCH=arm64 KBUILD_OUTPUT=$HOME/kernel/out CC=clang LLVM=1 LLVM_IAS=1 CLANG_TRIPLE=llvm- CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-"
-          make $MAKE_PARAMS $CONFIGS
-          make $MAKE_PARAMS
-
-      - name: Extract version info
-        run: |
-          cd $HOME/kernel
-          LOCALVERSION=$(grep "CONFIG_LOCALVERSION=" arch/arm64/configs/custom.config | cut -d'=' -f2 | tr -d '"')
-          echo "LOCALVERSION=$LOCALVERSION" >> $GITHUB_ENV
-          KERNEL_NAME_RAW="${LOCALVERSION#-}"
-          KERNEL_NAME_RELEASE="${KERNEL_NAME_RAW//Λ/A}"
-          echo "KERNEL_NAME=$KERNEL_NAME_RELEASE" >> $GITHUB_ENV
-
-      - name: Verify kernel build
-        run: |
-          if [ ! -f "$HOME/kernel/out/arch/arm64/boot/Image" ]; then
-            echo "Error: Kernel Image not found!"
-            exit 1
-          fi
-          echo "Kernel build successful!"
-
-      - name: Create zip
-        run: |
-          cd $HOME/AnyKernel3
-          cp $HOME/kernel/out/arch/arm64/boot/Image $HOME/AnyKernel3/
-          7z a "${{ env.KERNEL_NAME }}.zip" . -xr!*.git*
-
-      - name: Publish to GitHub
-        uses: softprops/action-gh-release@v2
-        with:
-          files: /home/runner/AnyKernel3/*.zip
-          name: DΛG Kernels - ${{ env.DATE }}
-          tag_name: "${{ env.DATE }}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  build_wildksu_susfs:
-    name: Build WildKSU-SUSFS Kernel
-    needs: [notify-start]
-    runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.variant == 'All variants' || github.event.inputs.variant == 'WildKSU-SUSFS' }}
-    
-    steps:
-      - name: Checkout DΛG branch
-        uses: actions/checkout@v4
-        with:
-          ref: 'DΛG'
-
-      - name: Download Apache Arrow's util_free_space.sh
-        run: |
-          curl -L -o util_free_space.sh https://raw.githubusercontent.com/apache/arrow/main/ci/scripts/util_free_space.sh
-          chmod +x util_free_space.sh
-          ./util_free_space.sh
-
-      - name: Install dependencies
-        run: |
-          sudo apt update && sudo apt install -y git device-tree-compiler lz4 xz-utils zlib1g-dev openjdk-17-jdk gcc g++ python3 python-is-python3 p7zip-full android-sdk-libsparse-utils erofs-utils \
-          default-jdk git gnupg flex bison gperf build-essential zip curl libc6-dev libncurses-dev libx11-dev libreadline-dev libgl1 libgl1-mesa-dev \
-          python3 make sudo gcc g++ bc grep tofrodos python3-markdown libxml2-utils xsltproc zlib1g-dev python-is-python3 libc6-dev libtinfo6 \
-          make repo cpio kmod openssl libelf-dev pahole libssl-dev libarchive-tools zstd rsync --fix-missing && \
-          wget http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb && \
-          sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb && \
-          rm libtinfo5_6.3-2ubuntu0.1_amd64.deb
-      
-      - name: Make directories
-        run: |
-          mkdir -p $HOME/kernel
-          mkdir -p $HOME/toolchain
-          mkdir -p $HOME/toolchain/clang-r450784c
-
-      - name: Cache toolchain
-        id: cache-toolchain
-        uses: actions/cache@v4
-        with:
-          path: $HOME/toolchain/clang-r450784c
-          key: clang-r450784c-toolchain
-
-      - name: Fetch toolchain
-        if: steps.cache-toolchain.outputs.cache-hit != 'true'
-        run: |
-          wget -c https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/llvm-r450784/clang-r450784c.tar.gz -O clang.tar.gz
-          tar -xf clang.tar.gz -C $HOME/toolchain/clang-r450784c && rm -rf clang.tar.gz
-        
-      - name: Fetch AnyKernel3
-        run: |
-          git clone --branch a54x https://github.com/daglaroglou/AnyKernel3.git $HOME/AnyKernel3
-
-      - name: Fetch kernel source
-        run: |
-          git clone https://github.com/daglaroglou/android_kernel_samsung_a54x $HOME/kernel
-
-      - name: Login actions bot
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Set date
-        run: |
-          echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
-
-      - name: Import WildKSU driver
-        run: |
-          cd $HOME/kernel
-          curl -LSs "https://raw.githubusercontent.com/WildKernels/Wild_KSU/wild/kernel/setup.sh" | bash -s wild
-
-      - name: Set config variables for WildKSU
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_KSU \
-            --enable CONFIG_KPROBES
-
-      - name: Import SUSFS
-        run: |
-          cd $HOME
-          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android13-5.15
-
-      - name: Fetch kernel patches
-        run: |
-          cd $HOME
-          git clone https://github.com/daglaroglou/a54x_kernel_patches.git
-          git clone https://github.com/WildKernels/kernel_patches.git
-
-      - name: Copy SUSFS files
-        run: |
-          cd $HOME/susfs4ksu
-          cp kernel_patches/50_add_susfs_in_gki-android13-5.15.patch $HOME/kernel/
-          cp kernel_patches/fs/* $HOME/kernel/fs/
-          cp kernel_patches/include/linux/* $HOME/kernel/include/linux/
-
-      - name: Copy kernel patches
-        run: |
-          cd $HOME/a54x_kernel_patches
-          cp susfs/2.0.0/* $HOME/kernel/
-
-          cd $HOME/a54x_kernel_patches
-          cp wild/* $HOME/kernel/
-
-      - name: Apply patches
-        run: |
-          set +e
-          cd $HOME/kernel
-          patch -p1 < 50_add_susfs_in_gki-android13-5.15.patch
-          patch -p1 < exec.patch
-          patch -p1 < namespace.patch
-          patch -p1 < base.patch
-
-          cd $HOME/kernel/Wild_KSU
-          patch -p1 < apk_sign.patch
-          set -e
-
-      - name: Set config variables for SUSFS
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_KSU_SUSFS \
-            --enable CONFIG_KSU_SUSFS_SUS_PATH \
-            --enable CONFIG_KSU_SUSFS_SUS_MOUNT \
-            --enable CONFIG_KSU_SUSFS_SUS_KSTAT \
-            --enable CONFIG_KSU_SUSFS_SPOOF_UNAME \
-            --enable CONFIG_KSU_SUSFS_ENABLE_LOG \
-            --enable CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS \
-            --enable CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG \
-            --enable CONFIG_KSU_SUSFS_OPEN_REDIRECT
-
-      - name: Set config variables for Mountify
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_TMPFS_XATTR \
-            --enable CONFIG_TMPFS_POSIX_ACL
-
-      - name: Set config variable for Localversion
-        run: |
-          cd $HOME/kernel
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --set-str CONFIG_LOCALVERSION "-DΛG-WILDKSU_SUSFS" \
-            --set-val CONFIG_LOCALVERSION_AUTO n
-
-      - name: Build kernel
-        run: |
-          cd $HOME/kernel
-          export PATH="$HOME/toolchain/clang-r450784c/bin:$PATH"
-          export CONFIGS="a54x_defconfig custom.config"
-          export KERNEL_DIR=$HOME/kernel
-          export KBUILD_BUILD_HOST="Github-Actions"
-          export KBUILD_BUILD_USER="daglaroglou"
-          export PLATFORM_VERSION=16
-          export TARGET_SOC=s5e8835
-          export DEPMOD=depmod
-          MAKE_PARAMS="-j$(nproc --all) ARCH=arm64 KBUILD_OUTPUT=$HOME/kernel/out CC=clang LLVM=1 LLVM_IAS=1 CLANG_TRIPLE=llvm- CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-"
-          make $MAKE_PARAMS $CONFIGS
-          make $MAKE_PARAMS
-
-      - name: Extract version info
-        run: |
-          cd $HOME/kernel
-          LOCALVERSION=$(grep "CONFIG_LOCALVERSION=" arch/arm64/configs/custom.config | cut -d'=' -f2 | tr -d '"')
-          echo "LOCALVERSION=$LOCALVERSION" >> $GITHUB_ENV
-          KERNEL_NAME_RAW="${LOCALVERSION#-}"
-          KERNEL_NAME_RELEASE="${KERNEL_NAME_RAW//Λ/A}"
-          echo "KERNEL_NAME=$KERNEL_NAME_RELEASE" >> $GITHUB_ENV
-
-      - name: Verify kernel build
-        run: |
-          if [ ! -f "$HOME/kernel/out/arch/arm64/boot/Image" ]; then
-            echo "Error: Kernel Image not found!"
-            exit 1
-          fi
-          echo "Kernel build successful!"
-
-      - name: Create zip
-        run: |
-          cd $HOME/AnyKernel3
-          cp $HOME/kernel/out/arch/arm64/boot/Image $HOME/AnyKernel3/
-          7z a "${{ env.KERNEL_NAME }}.zip" . -xr!*.git*
-
-      - name: Publish to GitHub
-        uses: softprops/action-gh-release@v2
-        with:
-          files: /home/runner/AnyKernel3/*.zip
-          name: DΛG Kernels - ${{ env.DATE }}
-          tag_name: "${{ env.DATE }}"
+          files: /home/runner/release/*.zip
+          name: DΛG Kernels - ${{ steps.date.outputs.DATE }}
+          tag_name: ${{ steps.date.outputs.DATE }}
+          overwrite_files: true
+          body: |
+            ### Changelog
+            ${{ steps.changelog.outputs.CHANGELOG }}
+
+            ### Kernel managers
+            - **KernelSU:** https://github.com/tiann/KernelSU
+            - **KernelSU-Next:** https://github.com/KernelSU-Next/KernelSU-Next
+            - **ReSukiSU:** https://github.com/ReSukiSU/ReSukiSU (Actions or [nightly.link](https://nightly.link/ReSukiSU/ReSukiSU/workflows/build-manager/main/Manager-release.zip))
+            - **WildKSU:** https://github.com/WildKernels/Wild_KSU
+
+            ### SUSFS Module
+            - **SUSFS:** https://github.com/sidex15/susfs4ksu-module (Optional for ReSukiSU)
+
+            ### Build Information
+            - **Kernel Version:** 5.15.180
+            - **Clang Version:** r450784c
+            - **KernelSU Version:** ${{ steps.versions.outputs.KSU_VERSION }}
+            - **KernelSU-Next Version:** ${{ steps.versions.outputs.KSUN_VERSION }}
+            - **ReSukiSU Version:** ${{ steps.versions.outputs.RESUKISU_VERSION }}
+            - **WildKSU Version:** ${{ steps.versions.outputs.WILDKSU_VERSION }}
+            - **SUSFS Version:** 2.0.0
+            ---
+            <div align="center">
+            力を解き放つ
+            </div>
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   notify-release:
     name: Send Release Notification
     runs-on: ubuntu-latest
-    needs: [notify-start, build_dag, build_permissive, build_ksu, build_ksun, build_sukisu, build_wildksu, build_ksu_susfs, build_ksun_susfs, build_sukisu_susfs, build_wildksu_susfs]
+    needs: [publish-release]
     if: always()
-    
     steps:
       - name: Checkout DΛG branch
         uses: actions/checkout@v4
         with:
-          ref: 'DΛG'
+          ref: "DΛG"
 
       - name: Set date
-        run: echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+        id: date
+        run: echo "DATE=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
 
       - name: Read CHANGELOG
         id: changelog
         run: |
           CHANGELOG=$(cat CHANGELOG.md)
-          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          echo "CHANGELOG<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$CHANGELOG" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Send Telegram Release Notification
         run: |
@@ -1777,6 +526,6 @@ jobs:
             \`\`\`
             ${{ steps.changelog.outputs.CHANGELOG }}
             \`\`\`
-            📥 [Download from GitHub Releases](https://github.com/${{ github.repository }}/releases/tag/${{ env.DATE }})" \
+            📥 [Download from GitHub Releases](https://github.com/${{ github.repository }}/releases/tag/${{ steps.date.outputs.DATE }})" \
             -F parse_mode="Markdown" \
             -F disable_web_page_preview=true
