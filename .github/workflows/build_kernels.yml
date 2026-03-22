@@ -252,8 +252,8 @@ jobs:
               echo "⬇️  Fetching WildKSU (canary)..."
               curl -LSs "https://raw.githubusercontent.com/WildKernels/Wild_KSU/wild/kernel/setup.sh" | bash -s canary ;;
             wildksu)
-              echo "⬇️  Fetching WildKSU (wild)..."
-              curl -LSs "https://raw.githubusercontent.com/WildKernels/Wild_KSU/wild/kernel/setup.sh" | bash -s wild ;;
+              echo "⬇️  Fetching WildKSU (canary)..."
+              curl -LSs "https://raw.githubusercontent.com/WildKernels/Wild_KSU/wild/kernel/setup.sh" | bash -s canary ;;
             *)
               echo "❌ Unknown manager mode: ${{ matrix.ksu_mode }}" >&2
               exit 1 ;;
