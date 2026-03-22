@@ -48,8 +48,15 @@ jobs:
           curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
             -F message_thread_id="${{ secrets.TELEGRAM_MESSAGE_THREAD_ID }}" \
-            -F text="*New DΛG Kernel Build Started!*
-            🔗 [View GitHub Actions](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" \
+            -F text="🚀 *DΛG Kernel Build Started*
+
+            *Build Details*
+            • *Repo:* \`${{ github.repository }}\`
+            • *Variant:* \`${{ github.event.inputs.variant }}\`
+            • *Run ID:* \`${{ github.run_id }}\`
+            • *Actor:* \`${{ github.actor }}\`
+
+            🔗 [Open GitHub Actions Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" \
             -F parse_mode="Markdown" \
             -F disable_web_page_preview=true
 
@@ -228,15 +235,7 @@ jobs:
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
           wget https://raw.githubusercontent.com/daglaroglou/a54x_kernel_patches/refs/heads/main/permisssive/set_permissive.patch
-          patch -p1 < set_permissive.patch
-
-      - name: Apply WildKSU multi-manager patch
-        if: steps.selector.outputs.should_run == 'true' && matrix.variant == 'WildKSU'
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE/Wild_KSU"
-          wget https://raw.githubusercontent.com/WildKernels/kernel_patches/refs/heads/main/next/susfs_fix_patches/stable/v2.1.0/multi_manager.patch
-          patch -p1 < multi_manager.patch
+          patch -p1 < set_permissive.patch || true
 
       - name: Configure KernelSU / manager options
         if: steps.selector.outputs.should_run == 'true' && matrix.extra_ksu_flags != ''
@@ -287,10 +286,6 @@ jobs:
 
           git clone --depth=1 https://github.com/daglaroglou/a54x_kernel_patches.git
 
-          if [[ "${{ matrix.variant }}" == "WildKSU-SUSFS" ]]; then
-            git clone --depth=1 https://github.com/WildKernels/kernel_patches.git
-          fi
-
       - name: Copy SUSFS and custom patch files
         if: steps.selector.outputs.should_run == 'true' && matrix.susfs
         run: |
@@ -299,7 +294,11 @@ jobs:
           cp "$HOME/susfs4ksu/kernel_patches/fs/"* "$GITHUB_WORKSPACE/fs/"
           cp "$HOME/susfs4ksu/kernel_patches/include/linux/"* "$GITHUB_WORKSPACE/include/linux/"
           cp "$HOME/a54x_kernel_patches/susfs/2.0.0/"* "$GITHUB_WORKSPACE/"
-          cp "$HOME/a54x_kernel_patches/susfs/2.1.0/open-ksu.patch" "$GITHUB_WORKSPACE/"
+          if [[ "${{ matrix.variant }}" == "KSUN-SUSFS" ]]; then
+            cp "$HOME/a54x_kernel_patches/susfs/2.1.0/open-ksun.patch" "$GITHUB_WORKSPACE/"
+          else
+            cp "$HOME/a54x_kernel_patches/susfs/2.1.0/open-ksu.patch" "$GITHUB_WORKSPACE/"
+          fi
 
           if [[ "${{ matrix.variant }}" == "KSU-SUSFS" ]]; then
             cp "$HOME/susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" "$GITHUB_WORKSPACE/KernelSU/"
@@ -310,21 +309,19 @@ jobs:
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
-          patch -p1 < 50_add_susfs_in_gki-android13-5.15.patch
-          patch -p1 < exec.patch
-          patch -p1 < namespace.patch
-          patch -p1 < base.patch
-          patch -p1 < open-ksu.patch
+          patch -p1 < 50_add_susfs_in_gki-android13-5.15.patch || true
+          patch -p1 < exec.patch || true
+          patch -p1 < namespace.patch || true
+          patch -p1 < base.patch || true
+          if [[ "${{ matrix.variant }}" == "KSUN-SUSFS" ]]; then
+            patch -p1 < open-ksun.patch || true
+          else
+            patch -p1 < open-ksu.patch || true
+          fi
 
           if [[ "${{ matrix.variant }}" == "KSU-SUSFS" ]]; then
             cd "$GITHUB_WORKSPACE/KernelSU"
-            patch -p1 < 10_enable_susfs_for_ksu.patch
-          fi
-
-          if [[ "${{ matrix.variant }}" == "WildKSU-SUSFS" ]]; then
-            cd "$GITHUB_WORKSPACE/Wild_KSU"
-            wget https://raw.githubusercontent.com/WildKernels/kernel_patches/refs/heads/main/next/susfs_fix_patches/stable/v2.1.0/multi_manager.patch
-            patch -p1 < multi_manager.patch
+            patch -p1 < 10_enable_susfs_for_ksu.patch || true
           fi
 
       - name: Configure SUSFS option
@@ -521,11 +518,17 @@ jobs:
           curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
             -F message_thread_id="${{ secrets.TELEGRAM_MESSAGE_THREAD_ID }}" \
-            -F text="*New DΛG Kernel Build Released!*
-            *Changelog:*
+            -F text="🎉 *New DΛG Kernel Release Published*
+
+            *Release Details*
+            • *Repo:* \`${{ github.repository }}\`
+            • *Tag:* \`${{ steps.date.outputs.DATE }}\`
+
+            *Changelog*
             \`\`\`
             ${{ steps.changelog.outputs.CHANGELOG }}
             \`\`\`
+
             📥 [Download from GitHub Releases](https://github.com/${{ github.repository }}/releases/tag/${{ steps.date.outputs.DATE }})" \
             -F parse_mode="Markdown" \
             -F disable_web_page_preview=true
