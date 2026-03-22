@@ -55,7 +55,6 @@ jobs:
               '━━━━━━━━━━━━━━━━━━━━━━' \
               '📦 *Variant:* `${{ github.event.inputs.variant }}`' \
               '🗃️ *Repo:* `${{ github.repository }}`' \
-              '👤 *Triggered by:* `${{ github.actor }}`' \
               '🔢 *Run ID:* `${{ github.run_id }}`' \
               '━━━━━━━━━━━━━━━━━━━━━━' \
               '🔗 [Open Actions Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})')"
@@ -100,8 +99,8 @@ jobs:
             extra_ksu_flags: "--enable CONFIG_KSU --enable CONFIG_KPM"
           - variant: WildKSU
             localversion: -DΛG-WILDKSU
-            ksu_mode: wildksu_canary
-            susfs: false
+            ksu_mode: wildksu
+            susfs: true
             permissive: false
             extra_ksu_flags: "--enable CONFIG_KSU --enable CONFIG_KPROBES"
           - variant: KSU-SUSFS
@@ -251,9 +250,6 @@ jobs:
             wildksu_canary)
               echo "⬇️  Fetching WildKSU (canary)..."
               curl -LSs "https://raw.githubusercontent.com/WildKernels/Wild_KSU/wild/kernel/setup.sh" | bash -s canary ;;
-            wildksu)
-              echo "⬇️  Fetching WildKSU (canary)..."
-              curl -LSs "https://raw.githubusercontent.com/WildKernels/Wild_KSU/wild/kernel/setup.sh" | bash -s canary ;;
             *)
               echo "❌ Unknown manager mode: ${{ matrix.ksu_mode }}" >&2
               exit 1 ;;
@@ -391,9 +387,15 @@ jobs:
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
-          echo "⚙️  Enabling CONFIG_KSU_SUSFS..."
-          ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_KSU_SUSFS
-          echo "✅ SUSFS config enabled"
+          if [[ "${{ matrix.variant }}" == "WildKSU" ]]; then
+            echo "⚙️  Forcing CONFIG_KSU_SUSFS=n for WildKSU..."
+            ./scripts/config --file arch/arm64/configs/custom.config --set-val CONFIG_KSU_SUSFS n
+            echo "✅ CONFIG_KSU_SUSFS set to n for WildKSU"
+          else
+            echo "⚙️  Enabling CONFIG_KSU_SUSFS..."
+            ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_KSU_SUSFS
+            echo "✅ SUSFS config enabled"
+          fi
 
       - name: Configure Mountify options
         if: steps.selector.outputs.should_run == 'true'
