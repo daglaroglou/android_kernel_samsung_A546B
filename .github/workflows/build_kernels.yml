@@ -29,7 +29,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  TOOLCHAIN_DIR: /home/runer/toolchain/clang-r450784c
+  TOOLCHAIN_DIR: /home/runner/toolchain/clang-r450784c
   TOOLCHAIN_ARCHIVE_URL: https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/llvm-r450784/clang-r450784c.tar.gz
 
 jobs:
