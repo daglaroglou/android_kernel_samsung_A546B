@@ -1213,3 +1213,4 @@ CONFIG_KDP=n
 
 # LSM
 CONFIG_LSM="landlock,lockdown,baseband_guard,yama,loadpin,safesetid,integrity,selinux,smack,tomoyo,apparmor,bpf"
+CONFIG_LOG_BUF_SHIFT=20
