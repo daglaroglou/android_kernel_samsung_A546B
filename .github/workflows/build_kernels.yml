@@ -29,7 +29,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  TOOLCHAIN_DIR: $HOME/toolchain/clang-r450784c
+  TOOLCHAIN_DIR: /home/runer/toolchain/clang-r450784c
   TOOLCHAIN_ARCHIVE_URL: https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/llvm-r450784/clang-r450784c.tar.gz
 
 jobs:
@@ -196,47 +196,6 @@ jobs:
           tar -xf clang.tar.gz -C "$TOOLCHAIN_DIR"
           rm -f clang.tar.gz
 
-      - name: Validate / repair toolchain and export bin path
-        if: steps.selector.outputs.should_run == 'true'
-        run: |
-          set -euo pipefail
-
-          detect_toolchain_bin() {
-            if [[ -x "$TOOLCHAIN_DIR/bin/clang" && -x "$TOOLCHAIN_DIR/bin/ld.lld" ]]; then
-              echo "$TOOLCHAIN_DIR/bin"
-              return 0
-            fi
-
-            if [[ -x "$TOOLCHAIN_DIR/clang-r450784c/bin/clang" && -x "$TOOLCHAIN_DIR/clang-r450784c/bin/ld.lld" ]]; then
-              echo "$TOOLCHAIN_DIR/clang-r450784c/bin"
-              return 0
-            fi
-
-            return 1
-          }
-
-          TOOLCHAIN_BIN="$(detect_toolchain_bin || true)"
-
-          if [[ -z "$TOOLCHAIN_BIN" ]]; then
-            echo "Toolchain cache is missing clang/ld.lld. Re-downloading..."
-            rm -rf "$TOOLCHAIN_DIR"
-            mkdir -p "$TOOLCHAIN_DIR"
-            wget -c "$TOOLCHAIN_ARCHIVE_URL" -O clang.tar.gz
-            tar -xf clang.tar.gz -C "$TOOLCHAIN_DIR"
-            rm -f clang.tar.gz
-
-            TOOLCHAIN_BIN="$(detect_toolchain_bin || true)"
-            if [[ -z "$TOOLCHAIN_BIN" ]]; then
-              echo "Unable to locate clang/ld.lld after extraction." >&2
-              find "$TOOLCHAIN_DIR" -maxdepth 4 -type f \( -name clang -o -name ld.lld \) -print || true
-              exit 1
-            fi
-          fi
-
-          echo "TOOLCHAIN_BIN=$TOOLCHAIN_BIN" >> "$GITHUB_ENV"
-          "$TOOLCHAIN_BIN/clang" --version | head -n 1
-          "$TOOLCHAIN_BIN/ld.lld" --version | head -n 1
-
       - name: Fetch AnyKernel3
         if: steps.selector.outputs.should_run == 'true'
         run: |
@@ -395,9 +354,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
-          export PATH="$TOOLCHAIN_BIN:$PATH"
-          command -v clang
-          command -v ld.lld
+          export PATH="$TOOLCHAIN_DIR/bin:$PATH"
           export CONFIGS="a54x_defconfig custom.config"
           export KERNEL_DIR="$GITHUB_WORKSPACE"
           export KBUILD_BUILD_HOST="Github-Actions"
@@ -525,7 +482,7 @@ jobs:
             - **KernelSU-Next Version:** ${{ steps.versions.outputs.KSUN_VERSION }}
             - **ReSukiSU Version:** ${{ steps.versions.outputs.RESUKISU_VERSION }}
             - **WildKSU Version:** ${{ steps.versions.outputs.WILDKSU_VERSION }}
-            - **SUSFS Version:** 2.0.0
+            - **SUSFS Version:** 2.1.0
             ---
             <div align="center">
             力を解き放つ
