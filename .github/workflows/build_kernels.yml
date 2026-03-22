@@ -45,20 +45,20 @@ jobs:
 
       - name: Send Telegram Start Notification
         run: |
-          curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
             -F message_thread_id="${{ secrets.TELEGRAM_MESSAGE_THREAD_ID }}" \
-            -F text="🚀 *DΛG Kernel Build Started*
-
-            *Build Details*
-            • *Repo:* \`${{ github.repository }}\`
-            • *Variant:* \`${{ github.event.inputs.variant }}\`
-            • *Run ID:* \`${{ github.run_id }}\`
-            • *Actor:* \`${{ github.actor }}\`
-
-            🔗 [Open GitHub Actions Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" \
             -F parse_mode="Markdown" \
-            -F disable_web_page_preview=true
+            -F disable_web_page_preview=true \
+            -F text="$(printf '%s\n' \
+              '🔨 *DΛG Kernel Build Started*' \
+              '━━━━━━━━━━━━━━━━━━━━━━' \
+              '📦 *Variant:* `${{ github.event.inputs.variant }}`' \
+              '🗃️ *Repo:* `${{ github.repository }}`' \
+              '👤 *Triggered by:* `${{ github.actor }}`' \
+              '🔢 *Run ID:* `${{ github.run_id }}`' \
+              '━━━━━━━━━━━━━━━━━━━━━━' \
+              '🔗 [Open Actions Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})')"
 
   build:
     name: Build ${{ matrix.variant }} Kernel
@@ -146,17 +146,21 @@ jobs:
 
       - name: Skip non-selected variant
         if: steps.selector.outputs.should_run != 'true'
-        run: echo "Skipping ${{ matrix.variant }} because input variant is ${{ github.event.inputs.variant }}"
+        run: |
+          echo "⏭️  Skipping variant '${{ matrix.variant }}' — selected input is '${{ github.event.inputs.variant }}'"
 
       - name: Set date and start time
         if: steps.selector.outputs.should_run == 'true'
         run: |
           echo "DATE=$(date +'%Y-%m-%d')" >> "$GITHUB_ENV"
           echo "START_TIME=$(date +%s)" >> "$GITHUB_ENV"
+          echo "📅 Build date: $(date +'%Y-%m-%d %H:%M:%S UTC')"
+          echo "🔖 Variant: ${{ matrix.variant }}"
 
       - name: Download Apache Arrow's util_free_space.sh
         if: steps.selector.outputs.should_run == 'true'
         run: |
+          echo "💾 Checking available disk space..."
           curl -L -o util_free_space.sh https://raw.githubusercontent.com/apache/arrow/main/ci/scripts/util_free_space.sh
           chmod +x util_free_space.sh
           ./util_free_space.sh
@@ -164,22 +168,31 @@ jobs:
       - name: Install dependencies
         if: steps.selector.outputs.should_run == 'true'
         run: |
+          echo "📦 Updating package lists..."
           sudo apt update
+
+          echo "📦 Installing build dependencies..."
           sudo apt install -y \
             git device-tree-compiler lz4 xz-utils zlib1g-dev openjdk-17-jdk gcc g++ python3 python-is-python3 \
             p7zip-full android-sdk-libsparse-utils erofs-utils default-jdk gnupg flex bison gperf build-essential \
             zip curl libc6-dev libncurses-dev libx11-dev libreadline-dev libgl1 libgl1-mesa-dev bc grep tofrodos \
             python3-markdown libxml2-utils xsltproc libtinfo6 make repo cpio kmod openssl libelf-dev pahole \
             libssl-dev libarchive-tools zstd rsync --fix-missing
-          wget https://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb
+
+          echo "📦 Installing libtinfo5 (legacy ncurses compatibility)..."
+          wget -q https://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb
           sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb
           rm libtinfo5_6.3-2ubuntu0.1_amd64.deb
+
+          echo "✅ All dependencies installed successfully"
 
       - name: Prepare directories
         if: steps.selector.outputs.should_run == 'true'
         run: |
+          echo "📁 Creating toolchain directory at $TOOLCHAIN_DIR..."
           mkdir -p "$HOME/toolchain"
           mkdir -p "$TOOLCHAIN_DIR"
+          echo "✅ Directories ready"
 
       - name: Cache toolchain
         if: steps.selector.outputs.should_run == 'true'
@@ -192,63 +205,87 @@ jobs:
       - name: Fetch toolchain
         if: steps.selector.outputs.should_run == 'true' && steps.cache-toolchain.outputs.cache-hit != 'true'
         run: |
-          wget -c "$TOOLCHAIN_ARCHIVE_URL" -O clang.tar.gz
+          echo "⬇️  Cache miss — downloading Clang r450784c toolchain..."
+          wget -q --show-progress -c "$TOOLCHAIN_ARCHIVE_URL" -O clang.tar.gz
+          echo "📂 Extracting toolchain to $TOOLCHAIN_DIR..."
           tar -xf clang.tar.gz -C "$TOOLCHAIN_DIR"
           rm -f clang.tar.gz
+          echo "✅ Toolchain ready at $TOOLCHAIN_DIR"
+
+      - name: Toolchain cache hit
+        if: steps.selector.outputs.should_run == 'true' && steps.cache-toolchain.outputs.cache-hit == 'true'
+        run: echo "⚡ Toolchain restored from cache — skipping download"
 
       - name: Fetch AnyKernel3
         if: steps.selector.outputs.should_run == 'true'
         run: |
+          echo "⬇️  Cloning AnyKernel3 (branch: a54x)..."
           git clone --depth=1 --branch a54x https://github.com/daglaroglou/AnyKernel3.git "$HOME/AnyKernel3"
+          echo "✅ AnyKernel3 ready"
 
       - name: Import manager driver
         if: steps.selector.outputs.should_run == 'true'
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
+          echo "🔧 Setting up kernel manager driver (mode: ${{ matrix.ksu_mode }})..."
 
           case "${{ matrix.ksu_mode }}" in
             none)
-              echo "No manager driver for this variant" ;;
+              echo "ℹ️  No manager driver needed for this variant" ;;
             ksu)
+              echo "⬇️  Fetching KernelSU (main)..."
               curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main ;;
             ksun)
+              echo "⬇️  Fetching KernelSU-Next (dev)..."
               curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s dev ;;
             ksun_pershoot)
+              echo "⬇️  Fetching KernelSU-Next pershoot fork (dev-susfs)..."
               curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/dev-susfs/kernel/setup.sh" | bash -s dev-susfs ;;
             resukisu)
+              echo "⬇️  Fetching ReSukiSU (main)..."
               curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s main ;;
             resukisu_plain)
+              echo "⬇️  Fetching ReSukiSU (plain)..."
               curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash ;;
             wildksu_canary)
+              echo "⬇️  Fetching WildKSU (canary)..."
               curl -LSs "https://raw.githubusercontent.com/WildKernels/Wild_KSU/wild/kernel/setup.sh" | bash -s canary ;;
             wildksu)
+              echo "⬇️  Fetching WildKSU (wild)..."
               curl -LSs "https://raw.githubusercontent.com/WildKernels/Wild_KSU/wild/kernel/setup.sh" | bash -s wild ;;
             *)
-              echo "Unknown manager mode: ${{ matrix.ksu_mode }}" >&2
+              echo "❌ Unknown manager mode: ${{ matrix.ksu_mode }}" >&2
               exit 1 ;;
           esac
+
+          echo "✅ Manager driver ready"
 
       - name: Apply permissive patch
         if: steps.selector.outputs.should_run == 'true' && matrix.permissive
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
-          wget https://raw.githubusercontent.com/daglaroglou/a54x_kernel_patches/refs/heads/main/permisssive/set_permissive.patch
+          echo "🔓 Applying SELinux permissive patch..."
+          wget -q https://raw.githubusercontent.com/daglaroglou/a54x_kernel_patches/refs/heads/main/permisssive/set_permissive.patch
           patch -p1 < set_permissive.patch || true
+          echo "✅ Permissive patch applied"
 
       - name: Configure KernelSU / manager options
         if: steps.selector.outputs.should_run == 'true' && matrix.extra_ksu_flags != ''
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
+          echo "⚙️  Applying KSU config flags: ${{ matrix.extra_ksu_flags }}"
           ./scripts/config --file arch/arm64/configs/custom.config ${{ matrix.extra_ksu_flags }}
+          echo "✅ KSU config flags applied"
 
       - name: Configure permissive options
         if: steps.selector.outputs.should_run == 'true' && matrix.permissive
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
+          echo "⚙️  Configuring SELinux permissive options..."
           ./scripts/config --file arch/arm64/configs/custom.config \
             --enable CONFIG_SECURITY_SELINUX \
             --disable CONFIG_SECURITY_SELINUX_BOOTPARAM \
@@ -270,12 +307,14 @@ jobs:
             --disable CONFIG_INTEGRITY_ASYMMETRIC_KEYS \
             --disable CONFIG_INTEGRITY_TRUSTED_KEYRING \
             --disable CONFIG_INTEGRITY_AUDIT
+          echo "✅ SELinux permissive config applied"
 
       - name: Import SUSFS and fetch patch sources
         if: steps.selector.outputs.should_run == 'true' && matrix.susfs
         run: |
           set -euo pipefail
           cd "$HOME"
+          echo "⬇️  Cloning SUSFS sources for variant: ${{ matrix.variant }}..."
 
           case "${{ matrix.variant }}" in
             KSUN-SUSFS)
@@ -284,70 +323,99 @@ jobs:
               git clone --depth=1 -b gki-android13-5.15 https://gitlab.com/simonpunk/susfs4ksu.git ;;
           esac
 
+          echo "⬇️  Cloning a54x kernel patch sources..."
           git clone --depth=1 https://github.com/daglaroglou/a54x_kernel_patches.git
+          echo "✅ SUSFS sources ready"
 
       - name: Copy SUSFS and custom patch files
         if: steps.selector.outputs.should_run == 'true' && matrix.susfs
         run: |
           set -euo pipefail
+          echo "📋 Copying SUSFS patch files into kernel tree..."
           cp "$HOME/susfs4ksu/kernel_patches/50_add_susfs_in_gki-android13-5.15.patch" "$GITHUB_WORKSPACE/"
           cp "$HOME/susfs4ksu/kernel_patches/fs/"* "$GITHUB_WORKSPACE/fs/"
           cp "$HOME/susfs4ksu/kernel_patches/include/linux/"* "$GITHUB_WORKSPACE/include/linux/"
           cp "$HOME/a54x_kernel_patches/susfs/2.0.0/"* "$GITHUB_WORKSPACE/"
+
           if [[ "${{ matrix.variant }}" == "KSUN-SUSFS" ]]; then
+            echo "📋 Copying open-ksun.patch (KSUN variant)..."
             cp "$HOME/a54x_kernel_patches/susfs/2.1.0/open-ksun.patch" "$GITHUB_WORKSPACE/"
           else
+            echo "📋 Copying open-ksu.patch..."
             cp "$HOME/a54x_kernel_patches/susfs/2.1.0/open-ksu.patch" "$GITHUB_WORKSPACE/"
           fi
 
           if [[ "${{ matrix.variant }}" == "KSU-SUSFS" ]]; then
+            echo "📋 Copying KernelSU SUSFS enablement patch..."
             cp "$HOME/susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" "$GITHUB_WORKSPACE/KernelSU/"
           fi
+
+          echo "✅ All patch files copied"
 
       - name: Apply SUSFS patch chain
         if: steps.selector.outputs.should_run == 'true' && matrix.susfs
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
+
+          echo "🩹 Applying 50_add_susfs_in_gki-android13-5.15.patch..."
           patch -p1 < 50_add_susfs_in_gki-android13-5.15.patch || true
+
+          echo "🩹 Applying exec.patch..."
           patch -p1 < exec.patch || true
+
+          echo "🩹 Applying namespace.patch..."
           patch -p1 < namespace.patch || true
+
+          echo "🩹 Applying base.patch..."
           patch -p1 < base.patch || true
+
           if [[ "${{ matrix.variant }}" == "KSUN-SUSFS" ]]; then
+            echo "🩹 Applying open-ksun.patch..."
             patch -p1 < open-ksun.patch || true
           else
+            echo "🩹 Applying open-ksu.patch..."
             patch -p1 < open-ksu.patch || true
           fi
 
           if [[ "${{ matrix.variant }}" == "KSU-SUSFS" ]]; then
+            echo "🩹 Applying 10_enable_susfs_for_ksu.patch..."
             cd "$GITHUB_WORKSPACE/KernelSU"
             patch -p1 < 10_enable_susfs_for_ksu.patch || true
           fi
+
+          echo "✅ SUSFS patch chain applied"
 
       - name: Configure SUSFS option
         if: steps.selector.outputs.should_run == 'true' && matrix.susfs
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
+          echo "⚙️  Enabling CONFIG_KSU_SUSFS..."
           ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_KSU_SUSFS
+          echo "✅ SUSFS config enabled"
 
       - name: Configure Mountify options
         if: steps.selector.outputs.should_run == 'true'
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
+          echo "⚙️  Enabling Mountify options (TMPFS_XATTR, TMPFS_POSIX_ACL)..."
           ./scripts/config --file arch/arm64/configs/custom.config \
             --enable CONFIG_TMPFS_XATTR \
             --enable CONFIG_TMPFS_POSIX_ACL
+          echo "✅ Mountify options configured"
 
       - name: Configure localversion
         if: steps.selector.outputs.should_run == 'true'
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
+          echo "⚙️  Setting LOCALVERSION to '${{ matrix.localversion }}'..."
           ./scripts/config --file arch/arm64/configs/custom.config \
             --set-str CONFIG_LOCALVERSION "${{ matrix.localversion }}" \
             --set-val CONFIG_LOCALVERSION_AUTO n
+          echo "✅ Localversion configured"
 
       - name: Build kernel
         if: steps.selector.outputs.should_run == 'true'
@@ -362,20 +430,45 @@ jobs:
           export PLATFORM_VERSION=16
           export TARGET_SOC=s5e8835
           export DEPMOD=depmod
-          MAKE_PARAMS="-j$(nproc --all) ARCH=arm64 KBUILD_OUTPUT=$GITHUB_WORKSPACE/out CC=clang LLVM=1 LLVM_IAS=1 CLANG_TRIPLE=llvm- CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-"
+          MAKE_PARAMS="-j$(nproc --all) ARCH=arm64 KBUILD_OUTPUT=$GITHUB_WORKSPACE/out CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-"
+
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🏗️  Starting kernel build"
+          echo "   Variant    : ${{ matrix.variant }}"
+          echo "   Version    : ${{ matrix.localversion }}"
+          echo "   Threads    : $(nproc --all)"
+          echo "   Clang      : $(clang --version | head -1)"
+          echo "   Output     : $GITHUB_WORKSPACE/out"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          echo "⚙️  Generating .config from $CONFIGS..."
           make $MAKE_PARAMS $CONFIGS
+
+          echo ""
+          echo "🔨 Compiling kernel..."
+          BUILD_START=$(date +%s)
           make $MAKE_PARAMS
+          BUILD_END=$(date +%s)
+          BUILD_ELAPSED=$(( BUILD_END - BUILD_START ))
+
+          echo ""
+          echo "✅ Kernel compiled in $(( BUILD_ELAPSED / 60 ))m $(( BUILD_ELAPSED % 60 ))s"
+          echo "BUILD_ELAPSED=$BUILD_ELAPSED" >> "$GITHUB_ENV"
 
       - name: Verify kernel build
         if: steps.selector.outputs.should_run == 'true'
         run: |
           set -euo pipefail
           IMAGE_PATH="$GITHUB_WORKSPACE/out/arch/arm64/boot/Image"
+          echo "🔍 Verifying kernel image at $IMAGE_PATH..."
           if [[ ! -f "$IMAGE_PATH" ]]; then
-            echo "Error: Kernel Image not found!"
+            echo "❌ Kernel Image not found — build may have failed!"
             exit 1
           fi
-          ls -la "$IMAGE_PATH"
+          IMAGE_SIZE=$(du -sh "$IMAGE_PATH" | cut -f1)
+          echo "✅ Kernel Image found — Size: $IMAGE_SIZE"
+          echo "IMAGE_SIZE=$IMAGE_SIZE" >> "$GITHUB_ENV"
+          ls -lh "$IMAGE_PATH"
 
       - name: Create zip
         if: steps.selector.outputs.should_run == 'true'
@@ -386,9 +479,60 @@ jobs:
           KERNEL_NAME_RAW="${KERNEL_NAME_RAW#-}"
           KERNEL_NAME_RELEASE="${KERNEL_NAME_RAW//Λ/A}"
 
+          echo "📦 Packaging kernel into flashable zip..."
+          echo "   Zip name: ${KERNEL_NAME_RELEASE}.zip"
           cp "$GITHUB_WORKSPACE/out/arch/arm64/boot/Image" "$HOME/AnyKernel3/"
           cd "$HOME/AnyKernel3"
-          7z a "${KERNEL_NAME_RELEASE}.zip" . -xr'!*.git*'
+          7z a "${KERNEL_NAME_RELEASE}.zip" . -xr'!*.git*' | tail -1
+
+          ZIP_SIZE=$(du -sh "${KERNEL_NAME_RELEASE}.zip" | cut -f1)
+          echo "✅ Zip created — Size: $ZIP_SIZE"
+          echo "ZIP_NAME=${KERNEL_NAME_RELEASE}.zip" >> "$GITHUB_ENV"
+          echo "ZIP_SIZE=$ZIP_SIZE" >> "$GITHUB_ENV"
+
+      - name: Write job summary
+        if: steps.selector.outputs.should_run == 'true'
+        run: |
+          END_TIME=$(date +%s)
+          TOTAL_ELAPSED=$(( END_TIME - START_TIME ))
+          BUILD_MIN=$(( BUILD_ELAPSED / 60 ))
+          BUILD_SEC=$(( BUILD_ELAPSED % 60 ))
+          TOTAL_MIN=$(( TOTAL_ELAPSED / 60 ))
+          TOTAL_SEC=$(( TOTAL_ELAPSED % 60 ))
+
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## 🏗️ DΛG Kernel Build — ${{ matrix.variant }}
+
+          | Field | Value |
+          |---|---|
+          | **Variant** | \`${{ matrix.variant }}\` |
+          | **Version** | \`${{ matrix.localversion }}\` |
+          | **KSU Mode** | \`${{ matrix.ksu_mode }}\` |
+          | **SUSFS** | \`${{ matrix.susfs }}\` |
+          | **Permissive** | \`${{ matrix.permissive }}\` |
+          | **Date** | \`$DATE\` |
+          | **Actor** | \`${{ github.actor }}\` |
+          | **Run ID** | [\`${{ github.run_id }}\`](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
+
+          ### 📊 Build Stats
+
+          | Metric | Value |
+          |---|---|
+          | **Kernel Image Size** | \`$IMAGE_SIZE\` |
+          | **Zip File** | \`$ZIP_NAME\` |
+          | **Zip Size** | \`$ZIP_SIZE\` |
+          | **Compile Time** | \`${BUILD_MIN}m ${BUILD_SEC}s\` |
+          | **Total Job Time** | \`${TOTAL_MIN}m ${TOTAL_SEC}s\` |
+
+          ### 🛠️ Toolchain
+
+          | Tool | Value |
+          |---|---|
+          | **Clang** | \`r450784c\` |
+          | **ARCH** | \`arm64\` |
+          | **Target SOC** | \`s5e8835\` |
+          | **Platform** | \`$PLATFORM_VERSION\` |
+          EOF
 
       - name: Upload zipped kernel artifact
         if: steps.selector.outputs.should_run == 'true'
@@ -412,12 +556,15 @@ jobs:
 
       - name: Set date
         id: date
-        run: echo "DATE=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "DATE=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
+          echo "📅 Release date: $(date +'%Y-%m-%d')"
 
       - name: Read CHANGELOG.md
         id: changelog
         run: |
-          CHANGELOG=$(cat CHANGELOG.md)
+          echo "📄 Reading CHANGELOG.md..."
+          CHANGELOG=$(sed 's/^[[:space:]]*//' CHANGELOG.md)
           echo "CHANGELOG<<EOF" >> "$GITHUB_OUTPUT"
           echo "$CHANGELOG" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
@@ -425,17 +572,25 @@ jobs:
       - name: Fetch kernel manager versions
         id: versions
         run: |
+          echo "🔍 Fetching latest kernel manager versions..."
+
           KSU_VERSION=$(curl -s https://api.github.com/repos/tiann/KernelSU/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "   KernelSU        : $KSU_VERSION"
           echo "KSU_VERSION=$KSU_VERSION" >> "$GITHUB_OUTPUT"
 
           KSUN_VERSION=$(curl -s https://api.github.com/repos/KernelSU-Next/KernelSU-Next/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "   KernelSU-Next   : $KSUN_VERSION"
           echo "KSUN_VERSION=$KSUN_VERSION" >> "$GITHUB_OUTPUT"
 
           RESUKISU_VERSION=$(curl -s https://api.github.com/repos/ReSukiSU/ReSukiSU/tags | grep '"name":' | sed -E 's/.*"([^"]+)".*/\1/' | head -1)
+          echo "   ReSukiSU        : $RESUKISU_VERSION"
           echo "RESUKISU_VERSION=$RESUKISU_VERSION" >> "$GITHUB_OUTPUT"
 
           WILDKSU_VERSION=$(curl -s https://api.github.com/repos/WildKernels/Wild_KSU/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "   WildKSU         : $WILDKSU_VERSION"
           echo "WILDKSU_VERSION=$WILDKSU_VERSION" >> "$GITHUB_OUTPUT"
+
+          echo "✅ All versions fetched"
 
       - name: Download all kernel artifacts
         uses: actions/download-artifact@v4
@@ -447,13 +602,15 @@ jobs:
       - name: Verify downloaded artifacts
         run: |
           set -euo pipefail
-          ls -la /home/runner/release
+          echo "🔍 Verifying downloaded kernel artifacts..."
+          ls -lh /home/runner/release
           shopt -s nullglob
           files=(/home/runner/release/*.zip)
           if [[ ${#files[@]} -eq 0 ]]; then
-            echo "No kernel zips found to publish."
+            echo "❌ No kernel zips found — cannot publish release!"
             exit 1
           fi
+          echo "✅ Found ${#files[@]} kernel zip(s) ready to publish"
 
       - name: Publish to GitHub
         uses: softprops/action-gh-release@v2
@@ -508,27 +665,25 @@ jobs:
       - name: Read CHANGELOG
         id: changelog
         run: |
-          CHANGELOG=$(cat CHANGELOG.md)
+          CHANGELOG=$(sed 's/^[[:space:]]*//' CHANGELOG.md)
           echo "CHANGELOG<<EOF" >> "$GITHUB_OUTPUT"
           echo "$CHANGELOG" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Send Telegram Release Notification
         run: |
-          curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
             -F message_thread_id="${{ secrets.TELEGRAM_MESSAGE_THREAD_ID }}" \
-            -F text="🎉 *New DΛG Kernel Release Published*
-
-            *Release Details*
-            • *Repo:* \`${{ github.repository }}\`
-            • *Tag:* \`${{ steps.date.outputs.DATE }}\`
-
-            *Changelog*
-            \`\`\`
-            ${{ steps.changelog.outputs.CHANGELOG }}
-            \`\`\`
-
-            📥 [Download from GitHub Releases](https://github.com/${{ github.repository }}/releases/tag/${{ steps.date.outputs.DATE }})" \
             -F parse_mode="Markdown" \
-            -F disable_web_page_preview=true
+            -F disable_web_page_preview=true \
+            -F text="$(printf '%s\n' \
+              '🎉 *New DΛG Kernel Release*' \
+              '━━━━━━━━━━━━━━━━━━━━━━' \
+              '🗓️ *Date:* `${{ steps.date.outputs.DATE }}`' \
+              '🗃️ *Repo:* `${{ github.repository }}`' \
+              '━━━━━━━━━━━━━━━━━━━━━━' \
+              '📝 *Changelog*' \
+              '${{ steps.changelog.outputs.CHANGELOG }}' \
+              '━━━━━━━━━━━━━━━━━━━━━━' \
+              '📥 [Download from GitHub Releases](https://github.com/${{ github.repository }}/releases/tag/${{ steps.date.outputs.DATE }})')"
