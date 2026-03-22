@@ -387,15 +387,9 @@ jobs:
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
-          if [[ "${{ matrix.variant }}" == "WildKSU" ]]; then
-            echo "⚙️  Forcing CONFIG_KSU_SUSFS=n for WildKSU..."
-            ./scripts/config --file arch/arm64/configs/custom.config --set-val CONFIG_KSU_SUSFS n
-            echo "✅ CONFIG_KSU_SUSFS set to n for WildKSU"
-          else
-            echo "⚙️  Enabling CONFIG_KSU_SUSFS..."
-            ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_KSU_SUSFS
-            echo "✅ SUSFS config enabled"
-          fi
+          echo "⚙️  Enabling CONFIG_KSU_SUSFS..."
+          ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_KSU_SUSFS
+          echo "✅ SUSFS config enabled"
 
       - name: Configure Mountify options
         if: steps.selector.outputs.should_run == 'true'
@@ -492,56 +486,12 @@ jobs:
           echo "ZIP_NAME=${KERNEL_NAME_RELEASE}.zip" >> "$GITHUB_ENV"
           echo "ZIP_SIZE=$ZIP_SIZE" >> "$GITHUB_ENV"
 
-      - name: Write job summary
-        if: steps.selector.outputs.should_run == 'true'
-        run: |
-          END_TIME=$(date +%s)
-          TOTAL_ELAPSED=$(( END_TIME - START_TIME ))
-          BUILD_MIN=$(( BUILD_ELAPSED / 60 ))
-          BUILD_SEC=$(( BUILD_ELAPSED % 60 ))
-          TOTAL_MIN=$(( TOTAL_ELAPSED / 60 ))
-          TOTAL_SEC=$(( TOTAL_ELAPSED % 60 ))
-
-          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
-          ## 🏗️ DΛG Kernel Build — ${{ matrix.variant }}
-
-          | Field | Value |
-          |---|---|
-          | **Variant** | \`${{ matrix.variant }}\` |
-          | **Version** | \`${{ matrix.localversion }}\` |
-          | **KSU Mode** | \`${{ matrix.ksu_mode }}\` |
-          | **SUSFS** | \`${{ matrix.susfs }}\` |
-          | **Permissive** | \`${{ matrix.permissive }}\` |
-          | **Date** | \`$DATE\` |
-          | **Actor** | \`${{ github.actor }}\` |
-          | **Run ID** | [\`${{ github.run_id }}\`](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
-
-          ### 📊 Build Stats
-
-          | Metric | Value |
-          |---|---|
-          | **Kernel Image Size** | \`$IMAGE_SIZE\` |
-          | **Zip File** | \`$ZIP_NAME\` |
-          | **Zip Size** | \`$ZIP_SIZE\` |
-          | **Compile Time** | \`${BUILD_MIN}m ${BUILD_SEC}s\` |
-          | **Total Job Time** | \`${TOTAL_MIN}m ${TOTAL_SEC}s\` |
-
-          ### 🛠️ Toolchain
-
-          | Tool | Value |
-          |---|---|
-          | **Clang** | \`r450784c\` |
-          | **ARCH** | \`arm64\` |
-          | **Target SOC** | \`s5e8835\` |
-          | **Platform** | \`$PLATFORM_VERSION\` |
-          EOF
-
       - name: Upload zipped kernel artifact
         if: steps.selector.outputs.should_run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: kernel-${{ matrix.variant }}
-          path: $HOME/AnyKernel3/*.zip
+          path: /home/runner/AnyKernel3/*.zip
           if-no-files-found: error
           retention-days: 7
 
@@ -613,6 +563,56 @@ jobs:
             exit 1
           fi
           echo "✅ Found ${#files[@]} kernel zip(s) ready to publish"
+
+      - name: Write workflow summary
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" << 'EOF'
+          ## 🏗️ DΛG Kernel Build Summary
+          EOF
+
+          cat >> "$GITHUB_STEP_SUMMARY" << EOF
+          ### ⚙️ Run Info
+
+          | Field | Value |
+          |---|---|
+          | **Repository** | \`${{ github.repository }}\` |
+          | **Variant** | \`${{ github.event.inputs.variant }}\` |
+          | **Date** | \`$(date +'%Y-%m-%d')\` |
+          | **Run ID** | [\`${{ github.run_id }}\`](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
+          | **Build Time** | \`$(( env.BUILD_ELAPSED / 60 ))m $(( env.BUILD_ELAPSED % 60 ))s\` |
+          | **Kernel Image Size** | \`${{ env.IMAGE_SIZE }}\` |
+          | **Zip Size** | \`${{ env.ZIP_SIZE }}\` |
+
+          ### 🛠️ Toolchain & Target
+
+          | Field | Value |
+          |---|---|
+          | **Clang** | \`r450784c\` |
+          | **Kernel Version** | \`5.15.180\` |
+          | **Architecture** | \`arm64\` |
+          | **Target SOC** | \`s5e8835\` |
+          | **Android Platform** | \`16\` |
+          | **Cross Compile** | \`aarch64-linux-gnu-\` |
+
+          ### 📦 Kernel Managers
+
+          | Manager | Version |
+          |---|---|
+          | **KernelSU** | \`${{ steps.versions.outputs.KSU_VERSION }}\` |
+          | **KernelSU-Next** | \`${{ steps.versions.outputs.KSUN_VERSION }}\` |
+          | **ReSukiSU** | \`${{ steps.versions.outputs.RESUKISU_VERSION }}\` |
+          | **WildKSU** | \`${{ steps.versions.outputs.WILDKSU_VERSION }}\` |
+          | **SUSFS** | \`2.1.0\` |
+
+          ### 💸 Donation Links
+          | Field | Value |
+          |---|---|
+          | **PayPal** | https://paypal.me/daglaroglou |
+          | **Revolut** | https://revolut.me/daglaroglouc |
+          | **GitHub** | https://github.com/sponsors/daglaroglou |
+          | **BTC** | `bc1qp62x7ehcvddyf6yw4ye5dy9uw8hllxhah3u447` |
+          | **ETH** | `0xcD6782ADccb748ae13a08fd2A237dABE97Df0074` |
+          EOF
 
       - name: Publish to GitHub
         uses: softprops/action-gh-release@v2
