@@ -20,6 +20,16 @@ on:
           - KSUN-SUSFS
           - ReSukiSU-SUSFS
           - WildKSU-SUSFS
+      prerelease:
+        description: "Mark the GitHub release as a prerelease"
+        required: false
+        default: false
+        type: boolean
+      notifications:
+        description: "Telegram: post build-start and release messages"
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: write
@@ -36,7 +46,7 @@ jobs:
   notify-start:
     name: Send Start Notification
     runs-on: ubuntu-latest
-    if: always()
+    if: github.event.inputs.notifications == 'true'
     steps:
       - name: Checkout DΛG branch
         uses: actions/checkout@v6
@@ -62,6 +72,7 @@ jobs:
   build:
     name: Build ${{ matrix.variant }} Kernel
     needs: [notify-start]
+    if: ${{ !cancelled() && (needs.notify-start.result == 'success' || needs.notify-start.result == 'skipped') }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -607,7 +618,7 @@ jobs:
     name: Publish GitHub Release
     needs: [notify-start, build]
     runs-on: ubuntu-latest
-    if: always()
+    if: ${{ always() && !cancelled() && (needs.notify-start.result == 'success' || needs.notify-start.result == 'skipped') }}
     steps:
       - name: Checkout DΛG branch
         uses: actions/checkout@v6
@@ -725,6 +736,7 @@ jobs:
           files: /home/runner/release/*.zip
           name: DΛG Kernels - ${{ steps.date.outputs.DATE }}
           tag_name: ${{ steps.date.outputs.DATE }}
+          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
           overwrite_files: true
           body: |
             ### Changelog
@@ -766,7 +778,7 @@ jobs:
     name: Send Release Notification
     runs-on: ubuntu-latest
     needs: [publish-release]
-    if: always()
+    if: ${{ always() && github.event.inputs.notifications == 'true' }}
     steps:
       - name: Checkout DΛG branch
         uses: actions/checkout@v6
@@ -799,8 +811,8 @@ jobs:
               '🗃️ *Repo:* `${{ github.repository }}`' \
               '━━━━━━━━━━━━━━━━━━━━━━' \
               '📝 *Changelog*' \
-              '\`\`\`' \
+              '```' \
               '${{ steps.changelog.outputs.CHANGELOG }}' \
-              '\`\`\`' \
+              '```' \
               '━━━━━━━━━━━━━━━━━━━━━━' \
               '📥 [Download from GitHub Releases](https://github.com/${{ github.repository }}/releases/tag/${{ steps.date.outputs.DATE }})')"
