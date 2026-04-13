@@ -413,6 +413,80 @@ jobs:
             --set-val CONFIG_LOCALVERSION_AUTO n
           echo "✅ Localversion configured"
 
+      - name: Configure DroidSpaces options
+        if: steps.selector.outputs.should_run == 'true'
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          echo "⚙️  Applying DroidSpaces options (namespaces, netfilter, cgroups) to custom.config..."
+          ./scripts/config --file arch/arm64/configs/custom.config \
+            --enable CONFIG_SYSCTL \
+            --enable CONFIG_SYSVIPC \
+            --enable CONFIG_POSIX_MQUEUE \
+            --enable CONFIG_NAMESPACES \
+            --enable CONFIG_PID_NS \
+            --enable CONFIG_UTS_NS \
+            --enable CONFIG_IPC_NS \
+            --enable CONFIG_SECCOMP \
+            --enable CONFIG_SECCOMP_FILTER \
+            --enable CONFIG_CGROUPS \
+            --enable CONFIG_CGROUP_DEVICE \
+            --enable CONFIG_CGROUP_PIDS \
+            --enable CONFIG_MEMCG \
+            --enable CONFIG_CGROUP_SCHED \
+            --enable CONFIG_FAIR_GROUP_SCHED \
+            --enable CONFIG_CGROUP_FREEZER \
+            --enable CONFIG_CGROUP_NET_PRIO \
+            --enable CONFIG_DEVTMPFS \
+            --enable CONFIG_OVERLAY_FS \
+            --enable CONFIG_FW_LOADER \
+            --enable CONFIG_FW_LOADER_USER_HELPER \
+            --enable CONFIG_FW_LOADER_COMPRESS \
+            --enable CONFIG_NET_NS \
+            --enable CONFIG_VETH \
+            --enable CONFIG_BRIDGE \
+            --enable CONFIG_NETFILTER \
+            --enable CONFIG_BRIDGE_NETFILTER \
+            --enable CONFIG_NETFILTER_ADVANCED \
+            --enable CONFIG_NF_CONNTRACK \
+            --enable CONFIG_IP_NF_IPTABLES \
+            --enable CONFIG_IP_NF_FILTER \
+            --enable CONFIG_NF_NAT \
+            --enable CONFIG_NF_TABLES \
+            --enable CONFIG_IP_NF_TARGET_MASQUERADE \
+            --enable CONFIG_NETFILTER_XT_TARGET_MASQUERADE \
+            --enable CONFIG_NETFILTER_XT_TARGET_TCPMSS \
+            --enable CONFIG_NETFILTER_XT_MATCH_ADDRTYPE \
+            --enable CONFIG_NF_CONNTRACK_NETLINK \
+            --enable CONFIG_NF_NAT_REDIRECT \
+            --enable CONFIG_IP_ADVANCED_ROUTER \
+            --enable CONFIG_IP_MULTIPLE_TABLES \
+            --set-val CONFIG_ANDROID_PARANOID_NETWORK n \
+            --enable CONFIG_NETFILTER_XT_MATCH_COMMENT \
+            --enable CONFIG_NETFILTER_XT_MATCH_STATE \
+            --enable CONFIG_NETFILTER_XT_MATCH_CONNTRACK \
+            --enable CONFIG_NETFILTER_XT_MATCH_MULTIPORT \
+            --enable CONFIG_NETFILTER_XT_MATCH_HL \
+            --enable CONFIG_NETFILTER_XT_TARGET_REJECT \
+            --enable CONFIG_IP_NF_TARGET_REJECT \
+            --enable CONFIG_NETFILTER_XT_TARGET_LOG \
+            --enable CONFIG_IP_NF_TARGET_ULOG \
+            --enable CONFIG_NETFILTER_XT_MATCH_RECENT \
+            --enable CONFIG_NETFILTER_XT_MATCH_LIMIT \
+            --enable CONFIG_NETFILTER_XT_MATCH_HASHLIMIT \
+            --enable CONFIG_NETFILTER_XT_MATCH_OWNER \
+            --enable CONFIG_NETFILTER_XT_MATCH_PKTTYPE \
+            --enable CONFIG_NETFILTER_XT_MATCH_MARK \
+            --enable CONFIG_NETFILTER_XT_TARGET_MARK \
+            --enable CONFIG_IP_SET \
+            --enable CONFIG_IP_SET_HASH_IP \
+            --enable CONFIG_IP_SET_HASH_NET \
+            --enable CONFIG_NETFILTER_XT_SET \
+            --enable CONFIG_NETFILTER_NETLINK_QUEUE \
+            --enable CONFIG_NETFILTER_NETLINK_LOG \
+            --enable CONFIG_NETFILTER_XT_TARGET_NFLOG
+          echo "✅ DroidSpaces options configured"
+
       - name: Build kernel
         if: steps.selector.outputs.should_run == 'true'
         run: |
