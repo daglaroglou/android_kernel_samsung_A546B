@@ -589,7 +589,7 @@ jobs:
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
           export PATH="$TOOLCHAIN_DIR/bin:$PATH"
-          export CONFIGS="a54x_defconfig custom.config ds1.config ds2.config"
+          export CONFIGS="a54x_defconfig custom.config"
           export KERNEL_DIR="$GITHUB_WORKSPACE"
           export KBUILD_BUILD_HOST="Github-Actions"
           export KBUILD_BUILD_USER="daglaroglou"
