@@ -427,6 +427,48 @@ jobs:
 
           echo "✅ SUSFS patch chain applied"
 
+      - name: Apply zeromount patch (Super-Builders, android13-5.15)
+        if: steps.selector.outputs.should_run == 'true'
+        run: |
+          set -euo pipefail
+          ZB="$HOME/Super-Builders"
+          ZM_PATCH="$ZB/android13-5.15/WildKSU/patches/60_zeromount-android13-5.15.patch"
+          echo "Cloning Super-Builders (zeromount patches for GKI android13-5.15)..."
+          rm -rf "$ZB"
+          git clone --depth=1 https://github.com/jimsterino98/Super-Builders.git "$ZB"
+          if [[ ! -f "$ZM_PATCH" ]]; then
+            echo "ERROR: Zeromount patch not found: $ZM_PATCH" >&2
+            exit 1
+          fi
+          cd "$GITHUB_WORKSPACE"
+          echo "Applying 60_zeromount-android13-5.15.patch..."
+          cp "$ZM_PATCH" ./
+          patch -p1 < 60_zeromount-android13-5.15.patch || true
+          rm -f 60_zeromount-android13-5.15.patch
+
+          if [[ -f fs/proc/task_mmu.c ]]; then
+            echo "Patching task_mmu.c for zeromount mmap metadata hook..."
+            sed -i '/pgoff = ((loff_t)vma->vm_pgoff) << PAGE_SHIFT;/a\
+          #ifdef CONFIG_ZEROMOUNT\
+          \tzeromount_spoof_mmap_metadata(inode, \&dev, \&ino);\
+          #endif' fs/proc/task_mmu.c
+          fi
+
+          if [[ -f fs/stat.c.rej ]]; then
+            echo "Fixing stat.c (zeromount_stat_hook from reject hints)..."
+            if ! grep -q 'zeromount_stat_hook(dfd, filename, stat, request_mask, flags)' fs/stat.c; then
+              perl -0pi -e 's@(static int vfs_statx\(.*?\)\s*\{.*?orig_flow:\n#endif\n)@$1\n#ifdef CONFIG_ZEROMOUNT\n\tif (filename) {\n\t\tint zm_ret = zeromount_stat_hook(dfd, filename, stat, request_mask, flags);\n\t\tif (zm_ret != -ENOENT)\n\t\t\treturn zm_ret;\n\t}\n#endif\n\n@s' fs/stat.c
+            fi
+          fi
+
+          if [[ -f fs/Kconfig.rej ]]; then
+            echo "Fixing fs/Kconfig (add ZEROMOUNT if missing)..."
+            if ! grep -q '^config ZEROMOUNT$' fs/Kconfig; then
+              perl -0pi -e 's@(config IO_WQ\n\tbool\n)@\1\nconfig ZEROMOUNT\n\tbool "ZeroMount Path Redirection Subsystem"\n\tdefault y\n\thelp\n\t ZeroMount allows path redirection and virtual file injection\n\t without mounting filesystems. Useful for systemless modifications.\n\n@' fs/Kconfig
+            fi
+          fi
+          echo "Zeromount patch step finished"
+
       - name: Configure SUSFS option
         if: steps.selector.outputs.should_run == 'true' && matrix.susfs
         run: |
@@ -435,6 +477,15 @@ jobs:
           echo "⚙️  Enabling CONFIG_KSU_SUSFS..."
           ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_KSU_SUSFS
           echo "✅ SUSFS config enabled"
+
+      - name: Configure zeromount option
+        if: steps.selector.outputs.should_run == 'true'
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          echo "Enabling CONFIG_ZEROMOUNT..."
+          ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_ZEROMOUNT
+          echo "Zeromount config enabled"
 
       - name: Configure Mountify options
         if: steps.selector.outputs.should_run == 'true'
