@@ -434,7 +434,7 @@ jobs:
           ZB="$HOME/Super-Builders"
           ZM_PATCH="$ZB/android13-5.15/WildKSU/patches/60_zeromount-android13-5.15.patch"
           ZM_FIX_BASE="https://raw.githubusercontent.com/daglaroglou/a54x_kernel_patches/main/zeromount"
-          echo "Cloning Super-Builders (zeromount patches for GKI android13-5.15)..."
+          echo "⬇️  Cloning Super-Builders (zeromount patches for GKI android13-5.15)..."
           rm -rf "$ZB"
           git clone --depth=1 https://github.com/jimsterino98/Super-Builders.git "$ZB"
           if [[ ! -f "$ZM_PATCH" ]]; then
@@ -442,12 +442,12 @@ jobs:
             exit 1
           fi
           cd "$GITHUB_WORKSPACE"
-          echo "Applying 60_zeromount-android13-5.15.patch..."
+          echo "🩹 Applying 60_zeromount-android13-5.15.patch..."
           cp "$ZM_PATCH" ./
           patch -p1 < 60_zeromount-android13-5.15.patch || true
           rm -f 60_zeromount-android13-5.15.patch
 
-          echo "Applying zeromount reject-fix patches from daglaroglou/a54x_kernel_patches..."
+          echo "🩹 Applying zeromount reject-fix patches from daglaroglou/a54x_kernel_patches..."
           for f in namei.patch readdir.patch stat.patch task_mmu.patch; do
             echo "  → $f"
             curl -fsSL "$ZM_FIX_BASE/$f" -o "$f"
@@ -457,13 +457,32 @@ jobs:
           rm -f fs/namei.c.rej fs/readdir.c.rej fs/stat.c.rej fs/proc/task_mmu.c.rej
 
           if [[ -f fs/Kconfig.rej ]]; then
-            echo "Fixing fs/Kconfig (add ZEROMOUNT if missing)..."
+            echo "🔧 Fixing fs/Kconfig (add ZEROMOUNT if missing)..."
             if ! grep -q '^config ZEROMOUNT$' fs/Kconfig; then
               perl -0pi -e 's@(config IO_WQ\n\tbool\n)@\1\nconfig ZEROMOUNT\n\tbool "ZeroMount Path Redirection Subsystem"\n\tdefault y\n\thelp\n\t ZeroMount allows path redirection and virtual file injection\n\t without mounting filesystems. Useful for systemless modifications.\n\n@' fs/Kconfig
             fi
             rm -f fs/Kconfig.rej
           fi
-          echo "Zeromount patch step finished"
+          echo "✅ Zeromount patch step finished"
+
+      - name: Apply BBG
+        if: steps.selector.outputs.should_run == 'true'
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          echo "⬇️  Applying BBG..."
+          wget -O- https://github.com/vc-teahouse/Baseband-guard/raw/main/setup.sh | bash
+          sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' security/Kconfig
+          echo "✅ BBG applied"
+
+      - name: Configure BBG option
+        if: steps.selector.outputs.should_run == 'true'
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          echo "⚙️  Enabling CONFIG_BASEBAND_GUARD..."
+          ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_BBG
+          echo "✅ BBG config enabled"
 
       - name: Configure SUSFS option
         if: steps.selector.outputs.should_run == 'true' && matrix.susfs
