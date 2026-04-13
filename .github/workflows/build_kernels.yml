@@ -257,6 +257,40 @@ jobs:
 
           echo "✅ Manager driver ready"
 
+      - name: Clone Droidspaces-OSS and apply GKI patches
+        if: steps.selector.outputs.should_run == 'true'
+        run: |
+          set -euo pipefail
+          DS_SRC="$HOME/Droidspaces-OSS"
+          GKI_DIR="$DS_SRC/Documentation/resources/kernel-patches/GKI"
+          echo "⬇️  Cloning Droidspaces-OSS..."
+          rm -rf "$DS_SRC"
+          git clone --depth=1 https://github.com/ravindu644/Droidspaces-OSS.git "$DS_SRC"
+          if [[ ! -d "$GKI_DIR" ]]; then
+            echo "❌ GKI patch directory not found: $GKI_DIR" >&2
+            exit 1
+          fi
+          cd "$GITHUB_WORKSPACE"
+          mapfile -t patchfiles < <(find "$GKI_DIR" -maxdepth 1 -type f -name '*.patch' -printf '%f\n' | LC_ALL=C sort)
+          for base in "${patchfiles[@]}"; do
+            f="$GKI_DIR/$base"
+            case "$base" in
+              01.6.1+_disable_crc_checks_for_lkms.patch)
+                echo "⏭️  Skipping $base"
+                continue
+                ;;
+              03.5.10_or_lower_use_android_abi_padding_for_posix_mqueue\ copy.patch)
+                echo "⏭️  Skipping $base"
+                continue
+                ;;
+            esac
+            echo "📋 Copying $base into kernel tree..."
+            cp -v "$f" "$GITHUB_WORKSPACE/"
+            echo "🩹 Applying $base..."
+            patch -p1 < "$GITHUB_WORKSPACE/$base" || true
+          done
+          echo "✅ Droidspaces GKI patches applied"
+
       - name: Apply permissive patch
         if: steps.selector.outputs.should_run == 'true' && matrix.permissive
         run: |
@@ -493,7 +527,7 @@ jobs:
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
           export PATH="$TOOLCHAIN_DIR/bin:$PATH"
-          export CONFIGS="a54x_defconfig custom.config"
+          export CONFIGS="a54x_defconfig custom.config ds1.config ds2.config"
           export KERNEL_DIR="$GITHUB_WORKSPACE"
           export KBUILD_BUILD_HOST="Github-Actions"
           export KBUILD_BUILD_USER="daglaroglou"
