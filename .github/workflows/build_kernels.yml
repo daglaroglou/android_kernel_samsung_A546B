@@ -48,10 +48,10 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event.inputs.notifications == 'true'
     steps:
-      - name: Checkout DΛG branch
+      - name: Checkout DAG branch
         uses: actions/checkout@v6
         with:
-          ref: "DΛG"
+          ref: "DAG"
 
       - name: Send Telegram Start Notification
         run: |
@@ -140,10 +140,10 @@ jobs:
             extra_ksu_flags: "--enable CONFIG_KSU --enable CONFIG_KPROBES"
 
     steps:
-      - name: Checkout DΛG branch
+      - name: Checkout DAG branch
         uses: actions/checkout@v6
         with:
-          ref: "DΛG"
+          ref: "DAG"
 
       - name: Decide whether this variant should run
         id: selector
@@ -686,10 +686,10 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ always() && !cancelled() && (needs.notify-start.result == 'success' || needs.notify-start.result == 'skipped') }}
     steps:
-      - name: Checkout DΛG branch
+      - name: Checkout DAG branch
         uses: actions/checkout@v6
         with:
-          ref: "DΛG"
+          ref: "DAG"
 
       - name: Set date
         id: date
@@ -846,10 +846,10 @@ jobs:
     needs: [publish-release]
     if: ${{ always() && github.event.inputs.notifications == 'true' }}
     steps:
-      - name: Checkout DΛG branch
+      - name: Checkout DAG branch
         uses: actions/checkout@v6
         with:
-          ref: "DΛG"
+          ref: "DAG"
 
       - name: Set date
         id: date
