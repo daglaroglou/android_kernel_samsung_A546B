@@ -399,17 +399,17 @@ jobs:
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
 
+          #Prepare namespace.c for susfs patching
+          sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ {
+            /#ifdef CONFIG_KDP_NS/,/#endif/ {
+              /#else/,/#endif/!d
+              /#else/d
+              /#endif/d
+            }
+          }' fs/namespace.c
+
           echo "🩹 Applying 50_add_susfs_in_gki-android13-5.15.patch..."
           patch -p1 < 50_add_susfs_in_gki-android13-5.15.patch || true
-
-          echo "🩹 Applying exec.patch..."
-          patch -p1 < exec.patch || true
-
-          echo "🩹 Applying namespace.patch..."
-          patch -p1 < namespace.patch || true
-
-          echo "🩹 Applying base.patch..."
-          patch -p1 < base.patch || true
 
           if [[ "${{ matrix.variant }}" == "KSUN-SUSFS" ]]; then
             echo "🩹 Applying open-ksun.patch..."
