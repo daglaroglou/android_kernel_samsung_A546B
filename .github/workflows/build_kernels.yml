@@ -399,6 +399,9 @@ jobs:
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
 
+          #Prepare open.c for susfs patching
+          sed -i '/#ifdef CONFIG_SECURITY_DEFEX/,/^#endif/d' fs/open.c
+
           #Prepare namespace.c for susfs patching
           sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ {
             /#ifdef CONFIG_KDP_NS/,/#endif/ {
