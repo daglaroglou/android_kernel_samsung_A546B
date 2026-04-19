@@ -3,23 +3,6 @@ name: Build Kernels
 on:
   workflow_dispatch:
     inputs:
-      variant:
-        description: "Kernel variant to build"
-        required: true
-        default: "All variants"
-        type: choice
-        options:
-          - All variants
-          - DΛG
-          - Permissive
-          - KSU
-          - KSUN
-          - ReSukiSU
-          - WildKSU
-          - KSU-SUSFS
-          - KSUN-SUSFS
-          - ReSukiSU-SUSFS
-          - WildKSU-SUSFS
       prerelease:
         description: "Mark the GitHub release as a prerelease"
         required: false
@@ -30,17 +13,58 @@ on:
         required: false
         default: true
         type: boolean
+      kernelsu-next:
+        description: "KernelSU Next"
+        required: false
+        default: true
+        type: boolean
+      susfs:
+        description: "SUSFS"
+        required: false
+        default: true
+        type: boolean
+      zeromount:
+        description: "Zeromount"
+        required: false
+        default: true
+        type: boolean
+      bbg:
+        description: "BBG"
+        required: false
+        default: true
+        type: boolean
+      mountify:
+        description: "Mountify"
+        required: false
+        default: true
+        type: boolean
+      droidspaces:
+        description: "DroidSpaces"
+        required: false
+        default: true
+        type: boolean
+      ntsync:
+        description: "NTSYNC"
+        required: false
+        default: true
+        type: boolean
+      
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
-  group: build-kernels-${{ github.ref }}-${{ github.event.inputs.variant }}
+  group: build-kernels-${{ github.ref }}
   cancel-in-progress: false
 
 env:
   TOOLCHAIN_DIR: /home/runner/toolchain/clang-r450784c
   TOOLCHAIN_ARCHIVE_URL: https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/llvm-r450784/clang-r450784c.tar.gz
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   notify-start:
@@ -48,11 +72,6 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event.inputs.notifications == 'true'
     steps:
-      - name: Checkout DAG branch
-        uses: actions/checkout@v6
-        with:
-          ref: "DAG"
-
       - name: Send Telegram Start Notification
         run: |
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
@@ -63,126 +82,58 @@ jobs:
             -F text="$(printf '%s\n' \
               '🔨 *DΛG Kernel Build Started*' \
               '━━━━━━━━━━━━━━━━━━━━━━' \
-              '📦 *Variant:* `${{ github.event.inputs.variant }}`' \
+              '📦 *Variant:* `KernelSU-Next_SUSFS`' \
               '🗃️ *Repo:* `${{ github.repository }}`' \
               '🔢 *Run ID:* `${{ github.run_id }}`' \
               '━━━━━━━━━━━━━━━━━━━━━━' \
               '🔗 [Open Actions Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})')"
 
   build:
-    name: Build ${{ matrix.variant }} Kernel
+    name: Build ${{ github.event.inputs.kernelsu-next == 'true' && 'KernelSU-Next' || '' }}${{ github.event.inputs.susfs == 'true' && ' + SUSFS' || '' }}${{ github.event.inputs.zeromount == 'true' && ' + Zeromount' || '' }}${{ github.event.inputs.bbg == 'true' && ' + BBG' || '' }}${{ github.event.inputs.mountify == 'true' && ' + Mountify' || '' }}${{ github.event.inputs.droidspaces == 'true' && ' + DroidSpaces' || '' }}
     needs: [notify-start]
-    if: ${{ !cancelled() && (needs.notify-start.result == 'success' || needs.notify-start.result == 'skipped') }}
+    if: ${{ !cancelled() && (needs.notify-start.result == 'success' || needs.notify-start.result == 'skipped') && (github.event.inputs.kernelsu-next == 'true' || github.event.inputs.susfs == 'true' || github.event.inputs.zeromount == 'true' || github.event.inputs.bbg == 'true' || github.event.inputs.mountify == 'true' || github.event.inputs.droidspaces == 'true') }}
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - variant: DΛG
-            localversion: -DΛG
-            ksu_mode: none
-            susfs: false
-            permissive: false
-            extra_ksu_flags: ""
-          - variant: Permissive
-            localversion: -DΛG-PERMISSIVE
-            ksu_mode: none
-            susfs: false
-            permissive: true
-            extra_ksu_flags: ""
-          - variant: KSU
-            localversion: -DΛG-KSU
-            ksu_mode: ksu
-            susfs: false
-            permissive: false
-            extra_ksu_flags: "--enable CONFIG_KSU"
-          - variant: KSUN
-            localversion: -DΛG-KSUN
-            ksu_mode: ksun
-            susfs: false
-            permissive: false
-            extra_ksu_flags: "--enable CONFIG_KSU --enable CONFIG_KPROBES"
-          - variant: ReSukiSU
-            localversion: -DΛG-RESUKISU
-            ksu_mode: resukisu
-            susfs: false
-            permissive: false
-            extra_ksu_flags: "--enable CONFIG_KSU --enable CONFIG_KPM"
-          - variant: WildKSU
-            localversion: -DΛG-WILDKSU
-            ksu_mode: wildksu
-            susfs: true
-            permissive: false
-            extra_ksu_flags: "--enable CONFIG_KSU --enable CONFIG_KPROBES"
-          - variant: KSU-SUSFS
-            localversion: -DΛG-KSU_SUSFS
-            ksu_mode: ksu
-            susfs: true
-            permissive: false
-            extra_ksu_flags: "--enable CONFIG_KSU"
-          - variant: KSUN-SUSFS
-            localversion: -DΛG-KSUN_SUSFS
-            ksu_mode: ksun_pershoot
-            susfs: true
-            permissive: false
-            extra_ksu_flags: "--enable CONFIG_KSU --enable CONFIG_KPROBES --enable CONFIG_TRACEPOINTS"
-          - variant: ReSukiSU-SUSFS
-            localversion: -DΛG-RESUKISU_SUSFS
-            ksu_mode: resukisu_plain
-            susfs: true
-            permissive: false
-            extra_ksu_flags: "--enable CONFIG_KSU"
-          - variant: WildKSU-SUSFS
-            localversion: -DΛG-WILDKSU_SUSFS
-            ksu_mode: wildksu
-            susfs: true
-            permissive: false
-            extra_ksu_flags: "--enable CONFIG_KSU --enable CONFIG_KPROBES"
+    env:
+      BUILD_VARIANT: KernelSU-Next_SUSFS
+      BUILD_LOCALVERSION: -DΛG-KSUN_SUSFS
+      EXTRA_KSU_FLAGS: "--enable CONFIG_KSU"
+      KERNELSU_NEXT_HASH: 551ad80473f60e052917aec08abf5323b6ab2f7c
+      SUSFS_HASH: aa5d299dd85a4230f936b94dc5dd8303f27130a
+      KERNELSU_NEXT_VERSION: 3.2.0
+      SUSFS_VERSION: 2.1.0
 
     steps:
+      - name: Free disk space
+        uses: endersonmenezes/free-disk-space@v3
+        with:
+          remove_android: true
+          remove_dotnet: true
+          remove_haskell: true
+          remove_tool_cache: true
+          remove_swap: true
+
       - name: Checkout DAG branch
         uses: actions/checkout@v6
         with:
           ref: "DAG"
-
-      - name: Decide whether this variant should run
-        id: selector
-        run: |
-          if [[ "${{ github.event.inputs.variant }}" == "All variants" || "${{ github.event.inputs.variant }}" == "${{ matrix.variant }}" ]]; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "should_run=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Skip non-selected variant
-        if: steps.selector.outputs.should_run != 'true'
-        run: |
-          echo "⏭️  Skipping variant '${{ matrix.variant }}' — selected input is '${{ github.event.inputs.variant }}'"
+          fetch-depth: 1
 
       - name: Set date and start time
-        if: steps.selector.outputs.should_run == 'true'
         run: |
           echo "DATE=$(date +'%Y-%m-%d')" >> "$GITHUB_ENV"
           echo "START_TIME=$(date +%s)" >> "$GITHUB_ENV"
           echo "📅 Build date: $(date +'%Y-%m-%d %H:%M:%S UTC')"
-          echo "🔖 Variant: ${{ matrix.variant }}"
-
-      - name: Download Apache Arrow's util_free_space.sh
-        if: steps.selector.outputs.should_run == 'true'
-        run: |
-          echo "💾 Checking available disk space..."
-          curl -L -o util_free_space.sh https://raw.githubusercontent.com/apache/arrow/main/ci/scripts/util_free_space.sh
-          chmod +x util_free_space.sh
-          ./util_free_space.sh
+          echo "🔖 Variant: $BUILD_VARIANT"
 
       - name: Install dependencies
-        if: steps.selector.outputs.should_run == 'true'
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
           echo "📦 Updating package lists..."
-          sudo apt update
+          sudo apt-get update -qq
 
           echo "📦 Installing build dependencies..."
-          sudo apt install -y \
+          sudo apt-get install -y -qq \
             git device-tree-compiler lz4 xz-utils zlib1g-dev openjdk-17-jdk gcc g++ python3 python-is-python3 \
             p7zip-full android-sdk-libsparse-utils erofs-utils default-jdk gnupg flex bison gperf build-essential \
             zip curl libc6-dev libncurses-dev libx11-dev libreadline-dev libgl1 libgl1-mesa-dev bc grep tofrodos \
@@ -197,7 +148,6 @@ jobs:
           echo "✅ All dependencies installed successfully"
 
       - name: Prepare directories
-        if: steps.selector.outputs.should_run == 'true'
         run: |
           echo "📁 Creating toolchain directory at $TOOLCHAIN_DIR..."
           mkdir -p "$HOME/toolchain"
@@ -205,7 +155,6 @@ jobs:
           echo "✅ Directories ready"
 
       - name: Cache toolchain
-        if: steps.selector.outputs.should_run == 'true'
         id: cache-toolchain
         uses: actions/cache@v5.0.4
         with:
@@ -213,7 +162,7 @@ jobs:
           key: clang-r450784c-toolchain
 
       - name: Fetch toolchain
-        if: steps.selector.outputs.should_run == 'true' && steps.cache-toolchain.outputs.cache-hit != 'true'
+        if: steps.cache-toolchain.outputs.cache-hit != 'true'
         run: |
           echo "⬇️  Cache miss — downloading Clang r450784c toolchain..."
           wget -q --show-progress -c "$TOOLCHAIN_ARCHIVE_URL" -O clang.tar.gz
@@ -222,54 +171,25 @@ jobs:
           rm -f clang.tar.gz
           echo "✅ Toolchain ready at $TOOLCHAIN_DIR"
 
-      - name: Toolchain cache hit
-        if: steps.selector.outputs.should_run == 'true' && steps.cache-toolchain.outputs.cache-hit == 'true'
-        run: echo "⚡ Toolchain restored from cache — skipping download"
-
       - name: Fetch AnyKernel3
-        if: steps.selector.outputs.should_run == 'true'
         run: |
           echo "⬇️  Cloning AnyKernel3 (branch: a54x)..."
           git clone --depth=1 --branch a54x https://github.com/daglaroglou/AnyKernel3.git "$HOME/AnyKernel3"
           echo "✅ AnyKernel3 ready"
 
-      - name: Import manager driver
-        if: steps.selector.outputs.should_run == 'true'
+      - name: Import KernelSU-Next (dev)
+        if: github.event.inputs.kernelsu-next == 'true'
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
-          echo "🔧 Setting up kernel manager driver (mode: ${{ matrix.ksu_mode }})..."
+          echo "🔧 KernelSU-Next (dev)"
+          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s dev
+          cd "$GITHUB_WORKSPACE/KernelSU-Next"
+          git checkout ${{ env.KERNELSU_NEXT_HASH }}
+          echo "✅ KernelSU-Next driver ready"
 
-          case "${{ matrix.ksu_mode }}" in
-            none)
-              echo "ℹ️  No manager driver needed for this variant" ;;
-            ksu)
-              echo "⬇️  Fetching KernelSU (main)..."
-              curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main ;;
-            ksun)
-              echo "⬇️  Fetching KernelSU-Next (dev)..."
-              curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s dev ;;
-            ksun_pershoot)
-              echo "⬇️  Fetching KernelSU-Next pershoot fork (dev-susfs)..."
-              curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/dev-susfs/kernel/setup.sh" | bash -s dev-susfs ;;
-            resukisu)
-              echo "⬇️  Fetching ReSukiSU (main)..."
-              curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s main ;;
-            resukisu_plain)
-              echo "⬇️  Fetching ReSukiSU (plain)..."
-              curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash ;;
-            wildksu)
-              echo "⬇️  Fetching WildKSU (canary)..."
-              curl -LSs "https://raw.githubusercontent.com/WildKernels/Wild_KSU/wild/kernel/setup.sh" | bash -s canary ;;
-            *)
-              echo "❌ Unknown manager mode: ${{ matrix.ksu_mode }}" >&2
-              exit 1 ;;
-          esac
-
-          echo "✅ Manager driver ready"
-
-      - name: Clone Droidspaces-OSS and apply GKI patches
-        if: steps.selector.outputs.should_run == 'true'
+      - name: Clone Droidspaces-OSS and apply patches
+        if: github.event.inputs.droidspaces == 'true'
         run: |
           set -euo pipefail
           DS_SRC="$HOME/Droidspaces-OSS"
@@ -302,99 +222,42 @@ jobs:
           done
           echo "✅ Droidspaces GKI patches applied"
 
-      - name: Apply permissive patch
-        if: steps.selector.outputs.should_run == 'true' && matrix.permissive
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          echo "🔓 Applying SELinux permissive patch..."
-          wget -q https://raw.githubusercontent.com/daglaroglou/a54x_kernel_patches/refs/heads/main/permisssive/set_permissive.patch
-          patch -p1 < set_permissive.patch || true
-          echo "✅ Permissive patch applied"
-
       - name: Configure KernelSU / manager options
-        if: steps.selector.outputs.should_run == 'true' && matrix.extra_ksu_flags != ''
+        if: github.event.inputs.kernelsu-next == 'true'
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
-          echo "⚙️  Applying KSU config flags: ${{ matrix.extra_ksu_flags }}"
-          ./scripts/config --file arch/arm64/configs/custom.config ${{ matrix.extra_ksu_flags }}
+          echo "⚙️  Applying KSU config flags: $EXTRA_KSU_FLAGS"
+          ./scripts/config --file arch/arm64/configs/custom.config $EXTRA_KSU_FLAGS
           echo "✅ KSU config flags applied"
 
-      - name: Configure permissive options
-        if: steps.selector.outputs.should_run == 'true' && matrix.permissive
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          echo "⚙️  Configuring SELinux permissive options..."
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_SECURITY_SELINUX \
-            --disable CONFIG_SECURITY_SELINUX_BOOTPARAM \
-            --disable CONFIG_SECURITY_SELINUX_DISABLE \
-            --enable CONFIG_SECURITY_SELINUX_DEVELOP \
-            --enable CONFIG_SECURITY_SELINUX_AVC_STATS \
-            --set-val CONFIG_SECURITY_SELINUX_CHECKREQPROT_VALUE 0 \
-            --set-val CONFIG_SECURITY_SELINUX_SIDTAB_HASH_BITS 9 \
-            --set-val CONFIG_SECURITY_SELINUX_SID2STR_CACHE_SIZE 256 \
-            --enable CONFIG_DEFAULT_SECURITY_SELINUX \
-            --set-str CONFIG_DEFAULT_SECURITY "" \
-            --set-str CONFIG_CMDLINE "androidboot.selinux=permissive" \
-            --enable CONFIG_CMDLINE_EXTEND \
-            --enable CONFIG_MODULE_FORCE_UNLOAD \
-            --enable CONFIG_MODULE_LOAD \
-            --enable CONFIG_MODULE_FORCE_LOAD \
-            --disable CONFIG_INTEGRITY \
-            --disable CONFIG_INTEGRITY_SIGNATURE \
-            --disable CONFIG_INTEGRITY_ASYMMETRIC_KEYS \
-            --disable CONFIG_INTEGRITY_TRUSTED_KEYRING \
-            --disable CONFIG_INTEGRITY_AUDIT
-          echo "✅ SELinux permissive config applied"
-
       - name: Import SUSFS and fetch patch sources
-        if: steps.selector.outputs.should_run == 'true' && matrix.susfs
+        if: github.event.inputs.susfs == 'true'
         run: |
           set -euo pipefail
           cd "$HOME"
-          echo "⬇️  Cloning SUSFS sources for variant: ${{ matrix.variant }}..."
-
-          case "${{ matrix.variant }}" in
-            KSUN-SUSFS)
-              git clone --depth=1 -b gki-android13-5.15 https://gitlab.com/daglaroglou/susfs4ksu.git ;;
-            *)
-              git clone --depth=1 -b gki-android13-5.15 https://gitlab.com/simonpunk/susfs4ksu.git ;;
-          esac
+          echo "⬇️  Cloning SUSFS sources (gki-android13-5.15)..."
+          git clone --depth=1 -b gki-android13-5.15 https://gitlab.com/simonpunk/susfs4ksu.git
+          cd "$HOME/susfs4ksu"
+          git checkout ${{ env.SUSFS_HASH }}
 
           echo "⬇️  Cloning a54x kernel patch sources..."
-          git clone --depth=1 https://github.com/daglaroglou/a54x_kernel_patches.git
+          git clone --depth=1 https://github.com/WildKernels/kernel_patches.git "$HOME/kernel_patches"
           echo "✅ SUSFS sources ready"
 
       - name: Copy SUSFS and custom patch files
-        if: steps.selector.outputs.should_run == 'true' && matrix.susfs
+        if: github.event.inputs.susfs == 'true'
         run: |
           set -euo pipefail
           echo "📋 Copying SUSFS patch files into kernel tree..."
           cp "$HOME/susfs4ksu/kernel_patches/50_add_susfs_in_gki-android13-5.15.patch" "$GITHUB_WORKSPACE/"
           cp "$HOME/susfs4ksu/kernel_patches/fs/"* "$GITHUB_WORKSPACE/fs/"
           cp "$HOME/susfs4ksu/kernel_patches/include/linux/"* "$GITHUB_WORKSPACE/include/linux/"
-          cp "$HOME/a54x_kernel_patches/susfs/2.0.0/"* "$GITHUB_WORKSPACE/"
-
-          if [[ "${{ matrix.variant }}" == "KSUN-SUSFS" ]]; then
-            echo "📋 Copying open-ksun.patch (KSUN variant)..."
-            cp "$HOME/a54x_kernel_patches/susfs/2.1.0/open-ksun.patch" "$GITHUB_WORKSPACE/"
-          else
-            echo "📋 Copying open-ksu.patch..."
-            cp "$HOME/a54x_kernel_patches/susfs/2.1.0/open-ksu.patch" "$GITHUB_WORKSPACE/"
-          fi
-
-          if [[ "${{ matrix.variant }}" == "KSU-SUSFS" ]]; then
-            echo "📋 Copying KernelSU SUSFS enablement patch..."
-            cp "$HOME/susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" "$GITHUB_WORKSPACE/KernelSU/"
-          fi
-
+          cp "$HOME/kernel_patches/next/susfs_fix_patches/v${{ env.SUSFS_VERSION }}/"*.patch "$GITHUB_WORKSPACE/KernelSU-Next/susfs_fix_patches/"
           echo "✅ All patch files copied"
 
       - name: Apply SUSFS patch chain
-        if: steps.selector.outputs.should_run == 'true' && matrix.susfs
+        if: github.event.inputs.susfs == 'true'
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
@@ -414,24 +277,17 @@ jobs:
           echo "🩹 Applying 50_add_susfs_in_gki-android13-5.15.patch..."
           patch -p1 < 50_add_susfs_in_gki-android13-5.15.patch || true
 
-          if [[ "${{ matrix.variant }}" == "KSUN-SUSFS" ]]; then
-            echo "🩹 Applying open-ksun.patch..."
-            patch -p1 < open-ksun.patch || true
-          else
-            echo "🩹 Applying open-ksu.patch..."
-            patch -p1 < open-ksu.patch || true
-          fi
-
-          if [[ "${{ matrix.variant }}" == "KSU-SUSFS" ]]; then
-            echo "🩹 Applying 10_enable_susfs_for_ksu.patch..."
-            cd "$GITHUB_WORKSPACE/KernelSU"
-            patch -p1 < 10_enable_susfs_for_ksu.patch || true
-          fi
+          cd $GITHUB_WORKSPACE/KernelSU-Next
+          for p in *.patch; do
+            echo "🩹 Applying $p..."
+            patch -p1 < $p || true
+            rm -f $p
+          done
 
           echo "✅ SUSFS patch chain applied"
 
       - name: Apply zeromount patch (Super-Builders + a54x reject fixes)
-        if: steps.selector.outputs.should_run == 'true'
+        if: github.event.inputs.zeromount == 'true'
         run: |
           set -euo pipefail
           ZB="$HOME/Super-Builders"
@@ -469,7 +325,7 @@ jobs:
           echo "✅ Zeromount patch step finished"
 
       - name: Apply BBG
-        if: steps.selector.outputs.should_run == 'true'
+        if: github.event.inputs.bbg == 'true'
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
@@ -479,7 +335,7 @@ jobs:
           echo "✅ BBG applied"
 
       - name: Configure BBG option
-        if: steps.selector.outputs.should_run == 'true'
+        if: github.event.inputs.bbg == 'true'
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
@@ -488,7 +344,7 @@ jobs:
           echo "✅ BBG config enabled"
 
       - name: Configure SUSFS option
-        if: steps.selector.outputs.should_run == 'true' && matrix.susfs
+        if: github.event.inputs.susfs == 'true'
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
@@ -497,7 +353,7 @@ jobs:
           echo "✅ SUSFS config enabled"
 
       - name: Configure zeromount option
-        if: steps.selector.outputs.should_run == 'true'
+        if: github.event.inputs.zeromount == 'true'
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
@@ -506,7 +362,7 @@ jobs:
           echo "Zeromount config enabled"
 
       - name: Configure Mountify options
-        if: steps.selector.outputs.should_run == 'true'
+        if: github.event.inputs.mountify == 'true'
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
@@ -517,18 +373,17 @@ jobs:
           echo "✅ Mountify options configured"
 
       - name: Configure localversion
-        if: steps.selector.outputs.should_run == 'true'
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
-          echo "⚙️  Setting LOCALVERSION to '${{ matrix.localversion }}'..."
+          echo "⚙️  Setting LOCALVERSION to '${{ env.BUILD_LOCALVERSION }}'..."
           ./scripts/config --file arch/arm64/configs/custom.config \
-            --set-str CONFIG_LOCALVERSION "${{ matrix.localversion }}" \
+            --set-str CONFIG_LOCALVERSION "${{ env.BUILD_LOCALVERSION }}" \
             --set-val CONFIG_LOCALVERSION_AUTO n
           echo "✅ Localversion configured"
 
       - name: Configure DroidSpaces options
-        if: steps.selector.outputs.should_run == 'true'
+        if: github.event.inputs.droidspaces == 'true'
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
@@ -601,8 +456,36 @@ jobs:
             --enable CONFIG_NETFILTER_XT_TARGET_NFLOG
           echo "✅ DroidSpaces options configured"
 
+      - name: Add unicodefix
+        run: |  
+          cd "$GITHUB_WORKSPACE"
+          echo "⚙️ Applying unicodefix..."
+          cp "$HOME/kernel_patches/common/unicode_bypass_fix_6.1-.patch" .
+          patch -p1 < unicode_bypass_fix_6.1-.patch
+          echo "✅ unicodefix applied"
+
+      - name: Add ntsync
+        if: github.event.inputs.ntsync == 'true'
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          echo "⚙️ Applying ntsync..."
+          cp "$HOME/kernel_patches/common/ntsync/ntsync_base.patch" .
+          cp "$HOME/kernel_patches/common/ntsync/ntsync_compat_android13-5.15.patch" .
+          patch -p1 < ntsync_base.patch || true
+          patch -p1 < ntsync_compat_android13-5.15.patch
+          echo "✅ ntsync applied"
+
+      - name: Configure NTSYNC option
+        if: github.event.inputs.ntsync == 'true'
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          echo "⚙️ Enabling CONFIG_NTSYNC..."
+          ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_NTSYNC
+          echo "✅ ntsync config enabled"
+
       - name: Build kernel
-        if: steps.selector.outputs.should_run == 'true'
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
@@ -618,8 +501,8 @@ jobs:
 
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "🏗️  Starting kernel build"
-          echo "   Variant    : ${{ matrix.variant }}"
-          echo "   Version    : ${{ matrix.localversion }}"
+          echo "   Variant    : ${{ env.BUILD_VARIANT }}"
+          echo "   Version    : ${{ env.BUILD_LOCALVERSION }}"
           echo "   Threads    : $(nproc --all)"
           echo "   Clang      : $(clang --version | head -1)"
           echo "   Output     : $GITHUB_WORKSPACE/out"
@@ -640,7 +523,6 @@ jobs:
           echo "BUILD_ELAPSED=$BUILD_ELAPSED" >> "$GITHUB_ENV"
 
       - name: Verify kernel build
-        if: steps.selector.outputs.should_run == 'true'
         run: |
           set -euo pipefail
           IMAGE_PATH="$GITHUB_WORKSPACE/out/arch/arm64/boot/Image"
@@ -655,11 +537,10 @@ jobs:
           ls -lh "$IMAGE_PATH"
 
       - name: Create zip
-        if: steps.selector.outputs.should_run == 'true'
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
-          KERNEL_NAME_RAW="${{ matrix.localversion }}"
+          KERNEL_NAME_RAW="${{ env.BUILD_LOCALVERSION }}"
           KERNEL_NAME_RAW="${KERNEL_NAME_RAW#-}"
           KERNEL_NAME_RELEASE="${KERNEL_NAME_RAW//Λ/A}"
 
@@ -675,10 +556,9 @@ jobs:
           echo "ZIP_SIZE=$ZIP_SIZE" >> "$GITHUB_ENV"
 
       - name: Upload zipped kernel artifact
-        if: steps.selector.outputs.should_run == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: kernel-${{ matrix.variant }}
+          name: kernel-${{ env.BUILD_VARIANT }}
           path: /home/runner/AnyKernel3/*.zip
           if-no-files-found: error
           retention-days: 7
@@ -687,50 +567,16 @@ jobs:
     name: Publish GitHub Release
     needs: [notify-start, build]
     runs-on: ubuntu-latest
-    if: ${{ always() && !cancelled() && (needs.notify-start.result == 'success' || needs.notify-start.result == 'skipped') }}
+    if: >-
+      !cancelled()
+      && needs.build.result == 'success'
+      && (needs.notify-start.result == 'success' || needs.notify-start.result == 'skipped')
     steps:
-      - name: Checkout DAG branch
-        uses: actions/checkout@v6
-        with:
-          ref: "DAG"
-
       - name: Set date
         id: date
         run: |
           echo "DATE=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
           echo "📅 Release date: $(date +'%Y-%m-%d')"
-
-      - name: Read CHANGELOG.md
-        id: changelog
-        run: |
-          echo "📄 Reading CHANGELOG.md..."
-          CHANGELOG=$(sed 's/^[[:space:]]*//' CHANGELOG.md)
-          echo "CHANGELOG<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$CHANGELOG" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
-
-      - name: Fetch kernel manager versions
-        id: versions
-        run: |
-          echo "🔍 Fetching latest kernel manager versions..."
-
-          KSU_VERSION=$(curl -s https://api.github.com/repos/tiann/KernelSU/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-          echo "   KernelSU        : $KSU_VERSION"
-          echo "KSU_VERSION=$KSU_VERSION" >> "$GITHUB_OUTPUT"
-
-          KSUN_VERSION=$(curl -s https://api.github.com/repos/KernelSU-Next/KernelSU-Next/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-          echo "   KernelSU-Next   : $KSUN_VERSION"
-          echo "KSUN_VERSION=$KSUN_VERSION" >> "$GITHUB_OUTPUT"
-
-          RESUKISU_VERSION=$(curl -s https://api.github.com/repos/ReSukiSU/ReSukiSU/tags | grep '"name":' | sed -E 's/.*"([^"]+)".*/\1/' | head -1)
-          echo "   ReSukiSU        : $RESUKISU_VERSION"
-          echo "RESUKISU_VERSION=$RESUKISU_VERSION" >> "$GITHUB_OUTPUT"
-
-          WILDKSU_VERSION=$(curl -s https://api.github.com/repos/WildKernels/Wild_KSU/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-          echo "   WildKSU         : $WILDKSU_VERSION"
-          echo "WILDKSU_VERSION=$WILDKSU_VERSION" >> "$GITHUB_OUTPUT"
-
-          echo "✅ All versions fetched"
 
       - name: Download all kernel artifacts
         uses: actions/download-artifact@v4
@@ -752,6 +598,29 @@ jobs:
           fi
           echo "✅ Found ${#files[@]} kernel zip(s) ready to publish"
 
+      - name: Load changelog and KernelSU-Next version
+        id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "📄 Reading CHANGELOG.md (contents API)..."
+          raw=$(gh api \
+            -H "Accept: application/vnd.github.raw" \
+            "repos/${{ github.repository }}/contents/CHANGELOG.md?ref=DAG")
+          CHANGELOG=$(printf '%s' "$raw" | sed 's/^[[:space:]]*//')
+          {
+            echo "CHANGELOG<<EOF"
+            printf '%s\n' "$CHANGELOG"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "🔍 Resolving latest KernelSU-Next release..."
+          KSUN_VERSION=$(gh api repos/KernelSU-Next/KernelSU-Next/releases/latest --jq .tag_name)
+          echo "   KernelSU-Next: $KSUN_VERSION"
+          echo "KSUN_VERSION=$KSUN_VERSION" >> "$GITHUB_OUTPUT"
+          echo "✅ Release metadata ready"
+
       - name: Write workflow summary
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" << 'EOF'
@@ -764,7 +633,7 @@ jobs:
           | Field | Value |
           |---|---|
           | **Repository** | \`${{ github.repository }}\` |
-          | **Variant** | \`${{ github.event.inputs.variant }}\` |
+          | **Variant** | \`KernelSU-Next_SUSFS\` |
           | **Date** | \`$(date +'%Y-%m-%d')\` |
           | **Run ID** | [\`${{ github.run_id }}\`](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
 
@@ -779,14 +648,11 @@ jobs:
           | **Android Platform** | \`16\` |
           | **Cross Compile** | \`aarch64-linux-gnu-\` |
 
-          ### 📦 Kernel Managers
+          ### 📦 Kernel managers
 
           | Manager | Version |
           |---|---|
-          | **KernelSU** | \`${{ steps.versions.outputs.KSU_VERSION }}\` |
-          | **KernelSU-Next** | \`${{ steps.versions.outputs.KSUN_VERSION }}\` |
-          | **ReSukiSU** | \`${{ steps.versions.outputs.RESUKISU_VERSION }}\` |
-          | **WildKSU** | \`${{ steps.versions.outputs.WILDKSU_VERSION }}\` |
+          | **KernelSU-Next** | \`${{ steps.meta.outputs.KSUN_VERSION }}\` |
           | **SUSFS** | \`2.1.0\` |
 
           ### 💸 Donation Links
@@ -795,8 +661,8 @@ jobs:
           | **PayPal** | https://paypal.me/daglaroglou |
           | **Revolut** | https://revolut.me/daglaroglouc |
           | **GitHub** | https://github.com/sponsors/daglaroglou |
-          | **BTC** | `bc1qp62x7ehcvddyf6yw4ye5dy9uw8hllxhah3u447` |
-          | **ETH** | `0xcD6782ADccb748ae13a08fd2A237dABE97Df0074` |
+          | **BTC** | bc1qp62x7ehcvddyf6yw4ye5dy9uw8hllxhah3u447 |
+          | **ETH** | 0xcD6782ADccb748ae13a08fd2A237dABE97Df0074 |
           EOF
 
       - name: Publish to GitHub
@@ -809,24 +675,18 @@ jobs:
           overwrite_files: true
           body: |
             ### Changelog
-            ${{ steps.changelog.outputs.CHANGELOG }}
+            ${{ steps.meta.outputs.CHANGELOG }}
 
             ### Kernel managers
-            - **KernelSU:** https://github.com/tiann/KernelSU
             - **KernelSU-Next:** https://github.com/KernelSU-Next/KernelSU-Next
-            - **ReSukiSU:** https://github.com/ReSukiSU/ReSukiSU (Actions or [nightly.link](https://nightly.link/ReSukiSU/ReSukiSU/workflows/build-manager/main/Manager-release.zip))
-            - **WildKSU:** https://github.com/WildKernels/Wild_KSU
 
-            ### SUSFS Module
-            - **SUSFS:** https://github.com/sidex15/susfs4ksu-module (Optional for ReSukiSU)
+            ### SUSFS module
+            - **SUSFS:** https://github.com/sidex15/susfs4ksu-module
 
-            ### Build Information
+            ### Build information
             - **Kernel Version:** 5.15.180
             - **Clang Version:** r450784c
-            - **KernelSU Version:** ${{ steps.versions.outputs.KSU_VERSION }}
-            - **KernelSU-Next Version:** ${{ steps.versions.outputs.KSUN_VERSION }}
-            - **ReSukiSU Version:** ${{ steps.versions.outputs.RESUKISU_VERSION }}
-            - **WildKSU Version:** ${{ steps.versions.outputs.WILDKSU_VERSION }}
+            - **KernelSU-Next Version:** ${{ steps.meta.outputs.KSUN_VERSION }}
             - **SUSFS Version:** 2.1.0
             ---
             ### ❤️ Donation Links
@@ -835,8 +695,8 @@ jobs:
             | **PayPal** | https://paypal.me/daglaroglou |
             | **Revolut** | https://revolut.me/daglaroglouc |
             | **GitHub** | https://github.com/sponsors/daglaroglou |
-            | **BTC** | `bc1qp62x7ehcvddyf6yw4ye5dy9uw8hllxhah3u447` |
-            | **ETH** | `0xcD6782ADccb748ae13a08fd2A237dABE97Df0074` |
+            | **BTC** | bc1qp62x7ehcvddyf6yw4ye5dy9uw8hllxhah3u447 |
+            | **ETH** | 0xcD6782ADccb748ae13a08fd2A237dABE97Df0074 |
             <div align="center">
             力を解き放つ
             </div>
@@ -847,24 +707,27 @@ jobs:
     name: Send Release Notification
     runs-on: ubuntu-latest
     needs: [publish-release]
-    if: ${{ always() && github.event.inputs.notifications == 'true' }}
+    if: github.event.inputs.notifications == 'true' && needs.publish-release.result == 'success'
     steps:
-      - name: Checkout DAG branch
-        uses: actions/checkout@v6
-        with:
-          ref: "DAG"
-
       - name: Set date
         id: date
         run: echo "DATE=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
 
-      - name: Read CHANGELOG
+      - name: Load changelog for Telegram
         id: changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          CHANGELOG=$(sed 's/^[[:space:]]*//' CHANGELOG.md)
-          echo "CHANGELOG<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$CHANGELOG" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          raw=$(gh api \
+            -H "Accept: application/vnd.github.raw" \
+            "repos/${{ github.repository }}/contents/CHANGELOG.md?ref=DAG")
+          CHANGELOG=$(printf '%s' "$raw" | sed 's/^[[:space:]]*//')
+          {
+            echo "CHANGELOG<<EOF"
+            printf '%s\n' "$CHANGELOG"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Send Telegram Release Notification
         run: |
