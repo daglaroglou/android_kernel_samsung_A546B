@@ -24,7 +24,7 @@ on:
         default: true
         type: boolean
       zeromount:
-        description: "Zeromount (Super-Builders patch; GKI android13-5.15 only)"
+        description: "Zeromount"
         required: false
         default: true
         type: boolean
