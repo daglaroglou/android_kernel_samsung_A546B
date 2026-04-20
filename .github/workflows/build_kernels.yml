@@ -258,6 +258,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "📋 Copying SUSFS patch files into kernel tree..."
+          cp "$HOME/susfs4ksu/kernel_patches/KernelSU/"* "$GITHUB_WORKSPACE/KernelSU-Next/"
           cp "$HOME/susfs4ksu/kernel_patches/50_add_susfs_in_gki-android13-5.15.patch" "$GITHUB_WORKSPACE/"
           cp "$HOME/susfs4ksu/kernel_patches/fs/"* "$GITHUB_WORKSPACE/fs/"
           cp "$HOME/susfs4ksu/kernel_patches/include/linux/"* "$GITHUB_WORKSPACE/include/linux/"
@@ -286,6 +287,8 @@ jobs:
           patch -p1 < 50_add_susfs_in_gki-android13-5.15.patch || true
 
           cd $GITHUB_WORKSPACE/KernelSU-Next
+          patch -p1 < 10_enable_susfs_for_ksu.patch || true
+          rm -rf < 10_enable_susfs_for_ksu.patch
           for p in *.patch; do
             echo "🩹 Applying $p..."
             patch -p1 < $p || true
