@@ -289,6 +289,8 @@ jobs:
           cd $GITHUB_WORKSPACE/KernelSU-Next
           patch -p1 < 10_enable_susfs_for_ksu.patch || true
           rm -rf < 10_enable_susfs_for_ksu.patch
+          rm -rf multi_manager.patch
+          rm -rf multi_sepolicy_fix.patch
           for p in *.patch; do
             echo "🩹 Applying $p..."
             patch -p1 < $p || true
