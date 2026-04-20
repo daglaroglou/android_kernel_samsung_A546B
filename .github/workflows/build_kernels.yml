@@ -507,6 +507,19 @@ jobs:
           patch -p1 < bbrv3-android13-5.15.patch
           echo "✅ BBRv3 applied"
 
+      - name: Configure BBRv3 option
+        if: github.event.inputs.bbrv3 == 'true'
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          echo ""
+          ./scripts/config --file arch/arm64/configs/custom.config \
+          --enable CONFIG_TCP_CONG_ADVANCED \
+          --enable CONFIG_TCP_CONG_BBR \
+          --enable CONFIG_DEFAULT_BBR \
+          --set-str CONFIG_DEFAULT_TCP_CONG "bbr" \
+          --enable CONFIG_NET_SCH_FQ
+
       - name: Configure localversion
         run: |
           set -euo pipefail
