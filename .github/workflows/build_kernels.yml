@@ -253,7 +253,7 @@ jobs:
           cp "$HOME/susfs4ksu/kernel_patches/50_add_susfs_in_gki-android13-5.15.patch" "$GITHUB_WORKSPACE/"
           cp "$HOME/susfs4ksu/kernel_patches/fs/"* "$GITHUB_WORKSPACE/fs/"
           cp "$HOME/susfs4ksu/kernel_patches/include/linux/"* "$GITHUB_WORKSPACE/include/linux/"
-          cp "$HOME/kernel_patches/next/susfs_fix_patches/v${{ env.SUSFS_VERSION }}/"*.patch "$GITHUB_WORKSPACE/KernelSU-Next/susfs_fix_patches/"
+          cp "$HOME/kernel_patches/next/susfs_fix_patches/v${{ env.SUSFS_VERSION }}/"*.patch "$GITHUB_WORKSPACE/KernelSU-Next/"
           echo "✅ All patch files copied"
 
       - name: Apply SUSFS patch chain
