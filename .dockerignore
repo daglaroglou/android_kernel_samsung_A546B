@@ -1,0 +1,6 @@
+# Shrink build context; kernel tree is bind-mounted at run time.
+out/
+**/out/
+.git/objects/
+.git/lfs/
+*.zip

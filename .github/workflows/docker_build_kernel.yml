@@ -1,0 +1,114 @@
+name: Docker — build kernel zip
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to build (branch, tag, or SHA)"
+        required: false
+        default: "DAG"
+        type: string
+      kernelsu-next:
+        description: "KernelSU Next"
+        required: false
+        default: true
+        type: boolean
+      susfs:
+        description: "SUSFS"
+        required: false
+        default: true
+        type: boolean
+      zeromount:
+        description: "Zeromount"
+        required: false
+        default: true
+        type: boolean
+      bbg:
+        description: "BBG"
+        required: false
+        default: true
+        type: boolean
+      mountify:
+        description: "Mountify"
+        required: false
+        default: true
+        type: boolean
+      droidspaces:
+        description: "DroidSpaces"
+        required: false
+        default: true
+        type: boolean
+      ntsync:
+        description: "NTSYNC"
+        required: false
+        default: true
+        type: boolean
+      bbrv3:
+        description: "BBRv3"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-kernel-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  docker-build:
+    name: Build image and flashable zip
+    runs-on: ubuntu-latest
+    if: >-
+      inputs.kernelsu-next == true || inputs.susfs == true || inputs.zeromount == true
+      || inputs.bbg == true || inputs.mountify == true || inputs.droidspaces == true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build builder image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          tags: kernel-a54x:local
+          load: true
+
+      - name: Run kernel build in container
+        run: |
+          set -euo pipefail
+          mkdir -p docker-output
+          mkdir -p "$RUNNER_TEMP/kernel-work"
+          docker run --rm \
+            -e SYNC_SOURCE_DIR=/source \
+            -e KERNEL_DIR=/work/kernel \
+            -e KERNELSU_NEXT=${{ inputs.kernelsu-next }} \
+            -e SUSFS=${{ inputs.susfs }} \
+            -e ZEROMOUNT=${{ inputs.zeromount }} \
+            -e BBG=${{ inputs.bbg }} \
+            -e MOUNTIFY=${{ inputs.mountify }} \
+            -e DROIDSPACES=${{ inputs.droidspaces }} \
+            -e NTSYNC=${{ inputs.ntsync }} \
+            -e BBRV3=${{ inputs.bbrv3 }} \
+            -e BUILD_LOCALVERSION='-DΛG-KSUN_SUSFS' \
+            -e KBUILD_BUILD_HOST='Github-Actions' \
+            -e KBUILD_BUILD_USER='daglaroglou' \
+            -v "$GITHUB_WORKSPACE:/source:ro" \
+            -v "$RUNNER_TEMP/kernel-work:/work" \
+            -v "$GITHUB_WORKSPACE/docker-output:/output" \
+            kernel-a54x:local
+
+      - name: Upload zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-docker-zip
+          path: docker-output/*.zip
+          if-no-files-found: error
+          retention-days: 14

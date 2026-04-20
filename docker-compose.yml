@@ -1,0 +1,44 @@
+# kernel-shell — plain Ubuntu 24 + Clang; you run `make` yourself (no KSU / zip pipeline).
+#   docker compose run --rm kernel-shell
+#
+# kernel-build — full pipeline → zip in ./docker-output/ (host repo mounted read-only; work
+#   copy lives in Docker volume kernel-build-work). Wipe work cache: docker compose down -v
+#   mkdir -p docker-output && docker compose run --rm kernel-build
+services:
+  kernel-shell:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.minimal
+    stdin_open: true
+    tty: true
+    volumes:
+      - .:/kernel
+    working_dir: /kernel
+
+  kernel-build:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    init: true
+    volumes:
+      - .:/source:ro
+      - kernel-build-work:/work
+      - ./docker-output:/output
+    environment:
+      - SYNC_SOURCE_DIR=/source
+      - KERNEL_DIR=/work/kernel
+      - KERNELSU_NEXT=${KERNELSU_NEXT:-true}
+      - SUSFS=${SUSFS:-true}
+      - ZEROMOUNT=${ZEROMOUNT:-true}
+      - BBG=${BBG:-true}
+      - MOUNTIFY=${MOUNTIFY:-true}
+      - DROIDSPACES=${DROIDSPACES:-true}
+      - NTSYNC=${NTSYNC:-true}
+      - BBRV3=${BBRV3:-true}
+      - BUILD_LOCALVERSION=${BUILD_LOCALVERSION:--DAG-KSUN_SUSFS}
+      - BUILD_VARIANT=${BUILD_VARIANT:-KernelSU-Next_SUSFS}
+      - KBUILD_BUILD_HOST=${KBUILD_BUILD_HOST:-docker}
+      - KBUILD_BUILD_USER=${KBUILD_BUILD_USER:-kernel-builder}
+
+volumes:
+  kernel-build-work:

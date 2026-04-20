@@ -146,3 +146,7 @@ sphinx_*/
 
 # out directory
 out/
+
+# Docker (local bind-mount output; allow .dockerignore — root .* rule hides dotfiles)
+!/.dockerignore
+/docker-output/
