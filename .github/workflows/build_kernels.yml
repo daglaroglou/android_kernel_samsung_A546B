@@ -199,7 +199,8 @@ jobs:
           else
            curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/dev-susfs/kernel/setup.sh" | bash -s dev-susfs
           fi
-          #cd "$GITHUB_WORKSPACE/KernelSU-Next"
+          cd "$GITHUB_WORKSPACE/KernelSU-Next"
+          curl -L -s https://raw.githubusercontent.com/jimsterino98/kernel_patches_additional/refs/heads/main/static.patch | patch -p1
           #git checkout ${{ env.KERNELSU_NEXT_HASH }}
           echo "✅ KernelSU-Next driver ready"
 
@@ -568,7 +569,7 @@ jobs:
           echo ""
           echo "🔨 Compiling kernel..."
           BUILD_START=$(date +%s)
-          make $MAKE_PARAMS
+          make $MAKE_PARAMS Image
           BUILD_END=$(date +%s)
           BUILD_ELAPSED=$(( BUILD_END - BUILD_START ))
 
