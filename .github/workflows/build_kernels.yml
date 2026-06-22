@@ -569,7 +569,7 @@ jobs:
           echo ""
           echo "🔨 Compiling kernel..."
           BUILD_START=$(date +%s)
-          make $MAKE_PARAMS Image
+          make $MAKE_PARAMS
           BUILD_END=$(date +%s)
           BUILD_ELAPSED=$(( BUILD_END - BUILD_START ))
 
