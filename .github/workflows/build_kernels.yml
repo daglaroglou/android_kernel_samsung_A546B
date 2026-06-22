@@ -104,7 +104,7 @@ jobs:
       KERNELSU_NEXT_HASH: 30802e7260e2387176b9301377e88fc6fb0356b7
       SUSFS_HASH: 533533f65ab756f3fbfc74a857b8bdc8131e87ab
       KERNELSU_NEXT_VERSION: 3.2.0
-      SUSFS_VERSION: 2.1.0
+      SUSFS_VERSION: 2.2.0
       PATCHES_DIR: /home/runner/kernel_patches
 
     steps:
