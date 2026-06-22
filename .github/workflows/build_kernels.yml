@@ -194,9 +194,13 @@ jobs:
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
           echo "🔧 KernelSU-Next (dev)"
-          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s dev
-          cd "$GITHUB_WORKSPACE/KernelSU-Next"
-          git checkout ${{ env.KERNELSU_NEXT_HASH }}
+          if [[ ${{ github.event.inputs.susfs }} == 'false' ]]; then
+           curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/dev-susfs/kernel/setup.sh" | bash -s dev
+          else
+           curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/dev-susfs/kernel/setup.sh" | bash -s dev-susfs
+          fi
+          #cd "$GITHUB_WORKSPACE/KernelSU-Next"
+          #git checkout ${{ env.KERNELSU_NEXT_HASH }}
           echo "✅ KernelSU-Next driver ready"
 
       - name: Clone Droidspaces-OSS and apply patches
@@ -249,8 +253,8 @@ jobs:
           cd "$HOME"
           echo "⬇️  Cloning SUSFS sources (gki-android13-5.15)..."
           git clone -b gki-android13-5.15 https://gitlab.com/simonpunk/susfs4ksu.git
-          cd "$HOME/susfs4ksu"
-          git checkout ${{ env.SUSFS_HASH }}
+          #cd "$HOME/susfs4ksu"
+          #git checkout ${{ env.SUSFS_HASH }}
           echo "✅ SUSFS sources ready"
 
       - name: Copy SUSFS and custom patch files
@@ -286,16 +290,16 @@ jobs:
           echo "🩹 Applying 50_add_susfs_in_gki-android13-5.15.patch..."
           patch -p1 < 50_add_susfs_in_gki-android13-5.15.patch || true
 
-          cd $GITHUB_WORKSPACE/KernelSU-Next
-          patch -p1 < 10_enable_susfs_for_ksu.patch || true
-          rm -rf < 10_enable_susfs_for_ksu.patch
-          rm -rf multi_manager.patch
-          rm -rf multi_sepolicy_fix.patch
-          for p in *.patch; do
-            echo "🩹 Applying $p..."
-            patch -p1 < $p || true
-            rm -f $p
-          done
+          #cd $GITHUB_WORKSPACE/KernelSU-Next
+          #patch -p1 < 10_enable_susfs_for_ksu.patch || true
+          #rm -rf < 10_enable_susfs_for_ksu.patch
+          #rm -rf multi_manager.patch
+          #rm -rf multi_sepolicy_fix.patch
+          #for p in *.patch; do
+          #  echo "🩹 Applying $p..."
+          #  patch -p1 < $p || true
+          #  rm -f $p
+          #done
 
           echo "✅ SUSFS patch chain applied"
 
@@ -508,8 +512,7 @@ jobs:
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
           echo "⚙️ Applying BBRv3..."
-          cp "$PATCHES_DIR/bbr/bbrv3-android13-5.15.patch" .
-          patch -p1 < bbrv3-android13-5.15.patch
+          curl -L -s https://raw.githubusercontent.com/fatalcoder524/kernel_patches_additional/refs/heads/main/bbr3/0001-net-tcp-backport-BBRv3-to-android13-5.15.patch | patch -p1 -F3
           echo "✅ BBRv3 applied"
 
       - name: Configure BBRv3 option
@@ -521,8 +524,9 @@ jobs:
           ./scripts/config --file arch/arm64/configs/custom.config \
           --enable CONFIG_TCP_CONG_ADVANCED \
           --enable CONFIG_TCP_CONG_BBR \
-          --enable CONFIG_DEFAULT_BBR \
-          --set-str CONFIG_DEFAULT_TCP_CONG "bbr" \
+          --enable CONFIG_TCP_CONG_BBR3 \
+          --enable CONFIG_TCP_CONG_CUBIC \
+          --enable CONFIG_DEFAULT_CUBIC \
           --enable CONFIG_NET_SCH_FQ
 
       - name: Configure localversion
