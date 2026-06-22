@@ -405,19 +405,19 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           echo "⚙️  Applying DroidSpaces options to custom.config..."
           ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_SYSVIPC=y
-            --enable CONFIG_POSIX_MQUEUE=y
-            --enable CONFIG_IPC_NS=y
-            --enable CONFIG_PID_NS=y
-            --enable CONFIG_DEVTMPFS=y
-            --enable CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y
-            --enable CONFIG_NETFILTER_XT_TARGET_REJECT=y
-            --enable CONFIG_NETFILTER_XT_TARGET_LOG=y
-            --enable CONFIG_NETFILTER_XT_MATCH_RECENT=y
-            --enable CONFIG_IP_SET=y
-            --enable CONFIG_IP_SET_HASH_IP=y
-            --enable CONFIG_IP_SET_HASH_NET=y
-            --enable CONFIG_NETFILTER_XT_SET=y
+            --enable CONFIG_SYSVIPC \
+            --enable CONFIG_POSIX_MQUEUE \
+            --enable CONFIG_IPC_NS \
+            --enable CONFIG_PID_NS \
+            --enable CONFIG_DEVTMPFS \
+            --enable CONFIG_NETFILTER_XT_MATCH_ADDRTYPE \
+            --enable CONFIG_NETFILTER_XT_TARGET_REJECT \
+            --enable CONFIG_NETFILTER_XT_TARGET_LOG \
+            --enable CONFIG_NETFILTER_XT_MATCH_RECENT \
+            --enable CONFIG_IP_SET \
+            --enable CONFIG_IP_SET_HASH_IP \
+            --enable CONFIG_IP_SET_HASH_NET \
+            --enable CONFIG_NETFILTER_XT_SET
           echo "✅ DroidSpaces options configured"
 
       - name: Add unicodefix
