@@ -101,8 +101,8 @@ jobs:
       BUILD_VARIANT: KernelSU-Next_SUSFS
       BUILD_LOCALVERSION: -DΛG-KSUN_SUSFS
       EXTRA_KSU_FLAGS: "--enable CONFIG_KSU"
-      KERNELSU_NEXT_HASH: 551ad80473f60e052917aec08abf5323b6ab2f7c
-      SUSFS_HASH: eaa5d299dd85a4230f936b94dc5dd8303f27130a
+      KERNELSU_NEXT_HASH: 30802e7260e2387176b9301377e88fc6fb0356b7
+      SUSFS_HASH: 533533f65ab756f3fbfc74a857b8bdc8131e87ab
       KERNELSU_NEXT_VERSION: 3.2.0
       SUSFS_VERSION: 2.1.0
       PATCHES_DIR: /home/runner/kernel_patches
@@ -194,14 +194,9 @@ jobs:
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
           echo "🔧 KernelSU-Next (dev)"
-          if [[ ${{ github.event.inputs.susfs }} == 'false' ]]; then
-           curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/dev-susfs/kernel/setup.sh" | bash -s dev
-          else
-           curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/dev-susfs/kernel/setup.sh" | bash -s dev-susfs
-          fi
+          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s dev
           cd "$GITHUB_WORKSPACE/KernelSU-Next"
-          curl -L -s https://raw.githubusercontent.com/jimsterino98/kernel_patches_additional/refs/heads/main/static.patch | patch -p1
-          #git checkout ${{ env.KERNELSU_NEXT_HASH }}
+          git checkout ${{ env.KERNELSU_NEXT_HASH }}
           echo "✅ KernelSU-Next driver ready"
 
       - name: Clone Droidspaces-OSS and apply patches
@@ -254,8 +249,8 @@ jobs:
           cd "$HOME"
           echo "⬇️  Cloning SUSFS sources (gki-android13-5.15)..."
           git clone -b gki-android13-5.15 https://gitlab.com/simonpunk/susfs4ksu.git
-          #cd "$HOME/susfs4ksu"
-          #git checkout ${{ env.SUSFS_HASH }}
+          cd "$HOME/susfs4ksu"
+          git checkout ${{ env.SUSFS_HASH }}
           echo "✅ SUSFS sources ready"
 
       - name: Copy SUSFS and custom patch files
@@ -291,16 +286,16 @@ jobs:
           echo "🩹 Applying 50_add_susfs_in_gki-android13-5.15.patch..."
           patch -p1 < 50_add_susfs_in_gki-android13-5.15.patch || true
 
-          #cd $GITHUB_WORKSPACE/KernelSU-Next
-          #patch -p1 < 10_enable_susfs_for_ksu.patch || true
+          cd $GITHUB_WORKSPACE/KernelSU-Next
+          patch -p1 < 10_enable_susfs_for_ksu.patch || true
           #rm -rf < 10_enable_susfs_for_ksu.patch
           #rm -rf multi_manager.patch
           #rm -rf multi_sepolicy_fix.patch
-          #for p in *.patch; do
-          #  echo "🩹 Applying $p..."
-          #  patch -p1 < $p || true
-          #  rm -f $p
-          #done
+          for p in *.patch; do
+            echo "🩹 Applying $p..."
+            patch -p1 < $p || true
+            rm -f $p
+          done
 
           echo "✅ SUSFS patch chain applied"
 
