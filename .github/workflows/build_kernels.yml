@@ -203,34 +203,35 @@ jobs:
         if: github.event.inputs.droidspaces == 'true'
         run: |
           set -euo pipefail
-          DS_SRC="$HOME/Droidspaces-OSS"
-          GKI_DIR="$DS_SRC/Documentation/resources/kernel-patches/GKI"
-          echo "⬇️  Cloning Droidspaces-OSS..."
-          rm -rf "$DS_SRC"
-          git clone --depth=1 https://github.com/ravindu644/Droidspaces-OSS.git "$DS_SRC"
-          if [[ ! -d "$GKI_DIR" ]]; then
-            echo "❌ GKI patch directory not found: $GKI_DIR" >&2
-            exit 1
-          fi
+          #DS_SRC="$HOME/Droidspaces-OSS"
+          #GKI_DIR="$DS_SRC/Documentation/resources/kernel-patches/GKI"
+          #echo "⬇️  Cloning Droidspaces-OSS..."
+          #rm -rf "$DS_SRC"
+          #git clone --depth=1 https://github.com/ravindu644/Droidspaces-OSS.git "$DS_SRC"
+          #if [[ ! -d "$GKI_DIR" ]]; then
+          #  echo "❌ GKI patch directory not found: $GKI_DIR" >&2
+          #  exit 1
+          #fi
           cd "$GITHUB_WORKSPACE"
-          mapfile -t patchfiles < <(find "$GKI_DIR" -maxdepth 1 -type f -name '*.patch' -printf '%f\n' | LC_ALL=C sort)
-          for base in "${patchfiles[@]}"; do
-            f="$GKI_DIR/$base"
-            case "$base" in
-              01.6.1+_disable_crc_checks_for_lkms.patch)
-                echo "⏭️  Skipping $base"
-                continue
-                ;;
-              03.5.10_or_lower_use_android_abi_padding_for_posix_mqueue\ copy.patch)
-                echo "⏭️  Skipping $base"
-                continue
-                ;;
-            esac
-            echo "📋 Copying $base into kernel tree..."
-            cp -v "$f" "$GITHUB_WORKSPACE/"
-            echo "🩹 Applying $base..."
-            patch -p1 < "$GITHUB_WORKSPACE/$base" || true
-          done
+          #mapfile -t patchfiles < <(find "$GKI_DIR" -maxdepth 1 -type f -name '*.patch' -printf '%f\n' | LC_ALL=C sort)
+          #for base in "${patchfiles[@]}"; do
+          #  f="$GKI_DIR/$base"
+          #  case "$base" in
+          #    01.6.1+_disable_crc_checks_for_lkms.patch)
+          #      echo "⏭️  Skipping $base"
+          #      continue
+          #      ;;
+          #    03.5.10_or_lower_use_android_abi_padding_for_posix_mqueue\ copy.patch)
+          #      echo "⏭️  Skipping $base"
+          #      continue
+          #      ;;
+          #  esac
+          #  echo "📋 Copying $base into kernel tree..."
+          #  cp -v "$f" "$GITHUB_WORKSPACE/"
+          #  echo "🩹 Applying $base..."
+          #  patch -p1 < "$GITHUB_WORKSPACE/$base" || true
+          #done
+          curl -L -s https://raw.githubusercontent.com/WildKernels/kernel_patches/refs/heads/main/common/droidspaces/fix_sysvipc_kabi_6_7_8.patch | patch -p1
           echo "✅ Droidspaces GKI patches applied"
 
       - name: Configure KernelSU / manager options
@@ -286,11 +287,9 @@ jobs:
           echo "🩹 Applying 50_add_susfs_in_gki-android13-5.15.patch..."
           patch -p1 < 50_add_susfs_in_gki-android13-5.15.patch || true
 
-          cd $GITHUB_WORKSPACE/KernelSU-Next
+          cd KernelSU-Next
           patch -p1 < 10_enable_susfs_for_ksu.patch || true
-          #rm -rf < 10_enable_susfs_for_ksu.patch
-          #rm -rf multi_manager.patch
-          #rm -rf multi_sepolicy_fix.patch
+          rm -rf < 10_enable_susfs_for_ksu.patch
           for p in *.patch; do
             echo "🩹 Applying $p..."
             patch -p1 < $p || true
@@ -406,71 +405,19 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           echo "⚙️  Applying DroidSpaces options to custom.config..."
           ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_SYSCTL \
-            --enable CONFIG_SYSVIPC \
-            --enable CONFIG_POSIX_MQUEUE \
-            --enable CONFIG_NAMESPACES \
-            --enable CONFIG_PID_NS \
-            --enable CONFIG_UTS_NS \
-            --enable CONFIG_IPC_NS \
-            --enable CONFIG_SECCOMP \
-            --enable CONFIG_SECCOMP_FILTER \
-            --enable CONFIG_CGROUPS \
-            --enable CONFIG_CGROUP_DEVICE \
-            --enable CONFIG_CGROUP_PIDS \
-            --enable CONFIG_MEMCG \
-            --enable CONFIG_CGROUP_SCHED \
-            --enable CONFIG_FAIR_GROUP_SCHED \
-            --enable CONFIG_CGROUP_FREEZER \
-            --enable CONFIG_CGROUP_NET_PRIO \
-            --enable CONFIG_DEVTMPFS \
-            --enable CONFIG_OVERLAY_FS \
-            --enable CONFIG_FW_LOADER \
-            --enable CONFIG_FW_LOADER_USER_HELPER \
-            --enable CONFIG_FW_LOADER_COMPRESS \
-            --enable CONFIG_NET_NS \
-            --enable CONFIG_VETH \
-            --enable CONFIG_BRIDGE \
-            --enable CONFIG_NETFILTER \
-            --enable CONFIG_BRIDGE_NETFILTER \
-            --enable CONFIG_NETFILTER_ADVANCED \
-            --enable CONFIG_NF_CONNTRACK \
-            --enable CONFIG_IP_NF_IPTABLES \
-            --enable CONFIG_IP_NF_FILTER \
-            --enable CONFIG_NF_NAT \
-            --enable CONFIG_NF_TABLES \
-            --enable CONFIG_IP_NF_TARGET_MASQUERADE \
-            --enable CONFIG_NETFILTER_XT_TARGET_MASQUERADE \
-            --enable CONFIG_NETFILTER_XT_TARGET_TCPMSS \
-            --enable CONFIG_NETFILTER_XT_MATCH_ADDRTYPE \
-            --enable CONFIG_NF_CONNTRACK_NETLINK \
-            --enable CONFIG_NF_NAT_REDIRECT \
-            --enable CONFIG_IP_ADVANCED_ROUTER \
-            --enable CONFIG_IP_MULTIPLE_TABLES \
-            --set-val CONFIG_ANDROID_PARANOID_NETWORK n \
-            --enable CONFIG_NETFILTER_XT_MATCH_COMMENT \
-            --enable CONFIG_NETFILTER_XT_MATCH_STATE \
-            --enable CONFIG_NETFILTER_XT_MATCH_CONNTRACK \
-            --enable CONFIG_NETFILTER_XT_MATCH_MULTIPORT \
-            --enable CONFIG_NETFILTER_XT_MATCH_HL \
-            --enable CONFIG_NETFILTER_XT_TARGET_REJECT \
-            --enable CONFIG_IP_NF_TARGET_REJECT \
-            --enable CONFIG_NETFILTER_XT_TARGET_LOG \
-            --enable CONFIG_IP_NF_TARGET_ULOG \
-            --enable CONFIG_NETFILTER_XT_MATCH_RECENT \
-            --enable CONFIG_NETFILTER_XT_MATCH_LIMIT \
-            --enable CONFIG_NETFILTER_XT_MATCH_HASHLIMIT \
-            --enable CONFIG_NETFILTER_XT_MATCH_OWNER \
-            --enable CONFIG_NETFILTER_XT_MATCH_PKTTYPE \
-            --enable CONFIG_NETFILTER_XT_MATCH_MARK \
-            --enable CONFIG_NETFILTER_XT_TARGET_MARK \
-            --enable CONFIG_IP_SET \
-            --enable CONFIG_IP_SET_HASH_IP \
-            --enable CONFIG_IP_SET_HASH_NET \
-            --enable CONFIG_NETFILTER_XT_SET \
-            --enable CONFIG_NETFILTER_NETLINK_QUEUE \
-            --enable CONFIG_NETFILTER_NETLINK_LOG \
-            --enable CONFIG_NETFILTER_XT_TARGET_NFLOG
+            --enable CONFIG_SYSVIPC=y
+            --enable CONFIG_POSIX_MQUEUE=y
+            --enable CONFIG_IPC_NS=y
+            --enable CONFIG_PID_NS=y
+            --enable CONFIG_DEVTMPFS=y
+            --enable CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y
+            --enable CONFIG_NETFILTER_XT_TARGET_REJECT=y
+            --enable CONFIG_NETFILTER_XT_TARGET_LOG=y
+            --enable CONFIG_NETFILTER_XT_MATCH_RECENT=y
+            --enable CONFIG_IP_SET=y
+            --enable CONFIG_IP_SET_HASH_IP=y
+            --enable CONFIG_IP_SET_HASH_NET=y
+            --enable CONFIG_NETFILTER_XT_SET=y
           echo "✅ DroidSpaces options configured"
 
       - name: Add unicodefix
