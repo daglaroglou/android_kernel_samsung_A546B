@@ -1,3 +1,2 @@
-1. Updated all root implementations to latest releases
+1. Updated KernelSU to latest version
 2. Updated SUSFS to latest version
-3. Replaced SukiSU with ReSukiSU
