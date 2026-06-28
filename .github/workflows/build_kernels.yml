@@ -1,747 +1,747 @@
 name: Build Kernels
 
 on:
-  workflow_dispatch:
-    inputs:
-      prerelease:
-        description: "Mark the GitHub release as a prerelease"
-        required: false
-        default: false
-        type: boolean
-      notifications:
-        description: "Telegram: post build-start and release messages"
-        required: false
-        default: true
-        type: boolean
-      kernelsu-next:
-        description: "KernelSU Next"
-        required: false
-        default: true
-        type: boolean
-      susfs:
-        description: "SUSFS"
-        required: false
-        default: true
-        type: boolean
-      zeromount:
-        description: "Zeromount"
-        required: false
-        default: true
-        type: boolean
-      bbg:
-        description: "BBG"
-        required: false
-        default: true
-        type: boolean
-      mountify:
-        description: "Mountify"
-        required: false
-        default: true
-        type: boolean
-      droidspaces:
-        description: "DroidSpaces"
-        required: false
-        default: true
-        type: boolean
-      ntsync:
-        description: "NTSYNC"
-        required: false
-        default: true
-        type: boolean
-      bbrv3:
-        description: "BBRv3"
-        required: false
-        default: true
-        type: boolean
+    workflow_dispatch:
+        inputs:
+            prerelease:
+                description: "Mark the GitHub release as a prerelease"
+                required: false
+                default: false
+                type: boolean
+            notifications:
+                description: "Telegram: post build-start and release messages"
+                required: false
+                default: true
+                type: boolean
+            kernelsu-next:
+                description: "KernelSU Next"
+                required: false
+                default: true
+                type: boolean
+            susfs:
+                description: "SUSFS"
+                required: false
+                default: true
+                type: boolean
+            zeromount:
+                description: "Zeromount"
+                required: false
+                default: true
+                type: boolean
+            bbg:
+                description: "BBG"
+                required: false
+                default: true
+                type: boolean
+            mountify:
+                description: "Mountify"
+                required: false
+                default: true
+                type: boolean
+            droidspaces:
+                description: "DroidSpaces"
+                required: false
+                default: true
+                type: boolean
+            ntsync:
+                description: "NTSYNC"
+                required: false
+                default: true
+                type: boolean
+            bbrv3:
+                description: "BBRv3"
+                required: false
+                default: true
+                type: boolean
 
 permissions:
-  contents: write
-  actions: write
+    contents: write
+    actions: write
 
 concurrency:
-  group: build-kernels-${{ github.ref }}
-  cancel-in-progress: false
+    group: build-kernels-${{ github.ref }}
+    cancel-in-progress: false
 
 env:
-  TOOLCHAIN_DIR: /home/runner/toolchain/clang-r450784c
-  TOOLCHAIN_ARCHIVE_URL: https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/llvm-r450784/clang-r450784c.tar.gz
+    TOOLCHAIN_DIR: /home/runner/toolchain/clang-r450784c
+    TOOLCHAIN_ARCHIVE_URL: https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/llvm-r450784/clang-r450784c.tar.gz
 
 defaults:
-  run:
-    shell: bash
+    run:
+        shell: bash
 
 jobs:
-  notify-start:
-    name: Send Start Notification
-    runs-on: ubuntu-latest
-    if: github.event.inputs.notifications == 'true'
-    steps:
-      - name: Send Telegram Start Notification
-        run: |
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-            -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -F message_thread_id="${{ secrets.TELEGRAM_MESSAGE_THREAD_ID }}" \
-            -F parse_mode="Markdown" \
-            -F disable_web_page_preview=true \
-            -F text="$(printf '%s\n' \
-              '🔨 *DΛG Kernel Build Started*' \
-              '━━━━━━━━━━━━━━━━━━━━━━' \
-              '📦 *Variant:* `KernelSU-Next_SUSFS`' \
-              '🗃️ *Repo:* `${{ github.repository }}`' \
-              '🔢 *Run ID:* `${{ github.run_id }}`' \
-              '━━━━━━━━━━━━━━━━━━━━━━' \
-              '🔗 [Open Actions Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})')"
+    notify-start:
+        name: Send Start Notification
+        runs-on: ubuntu-latest
+        if: github.event.inputs.notifications == 'true'
+        steps:
+            - name: Send Telegram Start Notification
+              run: |
+                  curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+                    -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+                    -F message_thread_id="${{ secrets.TELEGRAM_MESSAGE_THREAD_ID }}" \
+                    -F parse_mode="Markdown" \
+                    -F disable_web_page_preview=true \
+                    -F text="$(printf '%s\n' \
+                      '🔨 *DΛG Kernel Build Started*' \
+                      '━━━━━━━━━━━━━━━━━━━━━━' \
+                      '📦 *Variant:* `KernelSU-Next_SUSFS`' \
+                      '🗃️ *Repo:* `${{ github.repository }}`' \
+                      '🔢 *Run ID:* `${{ github.run_id }}`' \
+                      '━━━━━━━━━━━━━━━━━━━━━━' \
+                      '🔗 [Open Actions Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})')"
 
-  build:
-    name: Build ${{ github.event.inputs.kernelsu-next == 'true' && 'KernelSU-Next' || '' }}${{ github.event.inputs.susfs == 'true' && ' + SUSFS' || '' }}${{ github.event.inputs.zeromount == 'true' && ' + Zeromount' || '' }}${{ github.event.inputs.bbg == 'true' && ' + BBG' || '' }}${{ github.event.inputs.mountify == 'true' && ' + Mountify' || '' }}${{ github.event.inputs.droidspaces == 'true' && ' + DroidSpaces' || '' }}
-    needs: [notify-start]
-    if: ${{ !cancelled() && (needs.notify-start.result == 'success' || needs.notify-start.result == 'skipped') && (github.event.inputs.kernelsu-next == 'true' || github.event.inputs.susfs == 'true' || github.event.inputs.zeromount == 'true' || github.event.inputs.bbg == 'true' || github.event.inputs.mountify == 'true' || github.event.inputs.droidspaces == 'true') }}
-    runs-on: ubuntu-latest
-    env:
-      BUILD_VARIANT: KernelSU-Next_SUSFS
-      BUILD_LOCALVERSION: -DΛG-KSUN_SUSFS
-      EXTRA_KSU_FLAGS: "--enable CONFIG_KSU"
-      KERNELSU_NEXT_HASH: 30802e7260e2387176b9301377e88fc6fb0356b7
-      SUSFS_HASH: 533533f65ab756f3fbfc74a857b8bdc8131e87ab
-      KERNELSU_NEXT_VERSION: 3.2.0
-      SUSFS_VERSION: 2.2.0
-      PATCHES_DIR: /home/runner/kernel_patches
-
-    steps:
-      - name: Free disk space
-        uses: endersonmenezes/free-disk-space@v3
-        with:
-          remove_android: true
-          remove_dotnet: true
-          remove_haskell: true
-          remove_tool_cache: true
-          remove_swap: true
-
-      - name: Checkout DAG branch
-        uses: actions/checkout@v6
-        with:
-          ref: "DAG"
-          fetch-depth: 1
-
-      - name: Set date and start time
-        run: |
-          echo "DATE=$(date +'%Y-%m-%d')" >> "$GITHUB_ENV"
-          echo "START_TIME=$(date +%s)" >> "$GITHUB_ENV"
-          echo "📅 Build date: $(date +'%Y-%m-%d %H:%M:%S UTC')"
-          echo "🔖 Variant: $BUILD_VARIANT"
-
-      - name: Install dependencies
+    build:
+        name: Build ${{ github.event.inputs.kernelsu-next == 'true' && 'KernelSU-Next' || '' }}${{ github.event.inputs.susfs == 'true' && ' + SUSFS' || '' }}${{ github.event.inputs.zeromount == 'true' && ' + Zeromount' || '' }}${{ github.event.inputs.bbg == 'true' && ' + BBG' || '' }}${{ github.event.inputs.mountify == 'true' && ' + Mountify' || '' }}${{ github.event.inputs.droidspaces == 'true' && ' + DroidSpaces' || '' }}${{ github.event.inputs.ntsync == 'true' && ' + NTSYNC' || ''}}${{ github.event.inputs.bbrv3 == 'true' && ' + BBRv3' || '' }}
+        needs: [notify-start]
+        if: ${{ !cancelled() && (needs.notify-start.result == 'success' || needs.notify-start.result == 'skipped') && (github.event.inputs.kernelsu-next == 'true' || github.event.inputs.susfs == 'true' || github.event.inputs.zeromount == 'true' || github.event.inputs.bbg == 'true' || github.event.inputs.mountify == 'true' || github.event.inputs.droidspaces == 'true') }}
+        runs-on: ubuntu-latest
         env:
-          DEBIAN_FRONTEND: noninteractive
-        run: |
-          echo "📦 Updating package lists..."
-          sudo apt-get update -qq
-
-          echo "📦 Installing build dependencies..."
-          sudo apt-get install -y -qq \
-            git device-tree-compiler lz4 xz-utils zlib1g-dev openjdk-17-jdk gcc g++ python3 python-is-python3 \
-            p7zip-full android-sdk-libsparse-utils erofs-utils default-jdk gnupg flex bison gperf build-essential \
-            zip curl libc6-dev libncurses-dev libx11-dev libreadline-dev libgl1 libgl1-mesa-dev bc grep tofrodos \
-            python3-markdown libxml2-utils xsltproc libtinfo6 make repo cpio kmod openssl libelf-dev pahole \
-            libssl-dev libarchive-tools zstd rsync --fix-missing
-
-          echo "📦 Installing libtinfo5 (legacy ncurses compatibility)..."
-          wget -q https://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb
-          sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb
-          rm libtinfo5_6.3-2ubuntu0.1_amd64.deb
-
-          echo "✅ All dependencies installed successfully"
-
-      - name: Prepare directories
-        run: |
-          echo "📁 Creating toolchain directory at $TOOLCHAIN_DIR..."
-          mkdir -p "$HOME/toolchain"
-          mkdir -p "$TOOLCHAIN_DIR"
-          echo "✅ Directories ready"
-
-      - name: Cache toolchain
-        id: cache-toolchain
-        uses: actions/cache@v5.0.4
-        with:
-          path: ${{ env.TOOLCHAIN_DIR }}
-          key: clang-r450784c-toolchain
-
-      - name: Fetch toolchain
-        if: steps.cache-toolchain.outputs.cache-hit != 'true'
-        run: |
-          echo "⬇️  Cache miss — downloading Clang r450784c toolchain..."
-          wget -q --show-progress -c "$TOOLCHAIN_ARCHIVE_URL" -O clang.tar.gz
-          echo "📂 Extracting toolchain to $TOOLCHAIN_DIR..."
-          tar -xf clang.tar.gz -C "$TOOLCHAIN_DIR"
-          rm -f clang.tar.gz
-          echo "✅ Toolchain ready at $TOOLCHAIN_DIR"
-
-      - name: Fetch AnyKernel3
-        run: |
-          echo "⬇️  Cloning AnyKernel3 (branch: a54x)..."
-          git clone --depth=1 --branch a54x https://github.com/daglaroglou/AnyKernel3.git "$HOME/AnyKernel3"
-          echo "✅ AnyKernel3 ready"
-
-      - name: Fetch kernel patches (WildKernels)
-        run: |
-          echo "⬇️  Cloning WildKernels kernel patches..."
-          git clone https://github.com/WildKernels/kernel_patches.git "$HOME/kernel_patches"
-          echo "✅ WildKernels kernel patches ready"
-
-      - name: Import KernelSU-Next (dev)
-        if: github.event.inputs.kernelsu-next == 'true'
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          echo "🔧 KernelSU-Next (dev)"
-          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s dev
-          cd "$GITHUB_WORKSPACE/KernelSU-Next"
-          git checkout ${{ env.KERNELSU_NEXT_HASH }}
-          echo "✅ KernelSU-Next driver ready"
-
-      - name: Clone Droidspaces-OSS and apply patches
-        if: github.event.inputs.droidspaces == 'true'
-        run: |
-          set -euo pipefail
-          #DS_SRC="$HOME/Droidspaces-OSS"
-          #GKI_DIR="$DS_SRC/Documentation/resources/kernel-patches/GKI"
-          #echo "⬇️  Cloning Droidspaces-OSS..."
-          #rm -rf "$DS_SRC"
-          #git clone --depth=1 https://github.com/ravindu644/Droidspaces-OSS.git "$DS_SRC"
-          #if [[ ! -d "$GKI_DIR" ]]; then
-          #  echo "❌ GKI patch directory not found: $GKI_DIR" >&2
-          #  exit 1
-          #fi
-          cd "$GITHUB_WORKSPACE"
-          #mapfile -t patchfiles < <(find "$GKI_DIR" -maxdepth 1 -type f -name '*.patch' -printf '%f\n' | LC_ALL=C sort)
-          #for base in "${patchfiles[@]}"; do
-          #  f="$GKI_DIR/$base"
-          #  case "$base" in
-          #    01.6.1+_disable_crc_checks_for_lkms.patch)
-          #      echo "⏭️  Skipping $base"
-          #      continue
-          #      ;;
-          #    03.5.10_or_lower_use_android_abi_padding_for_posix_mqueue\ copy.patch)
-          #      echo "⏭️  Skipping $base"
-          #      continue
-          #      ;;
-          #  esac
-          #  echo "📋 Copying $base into kernel tree..."
-          #  cp -v "$f" "$GITHUB_WORKSPACE/"
-          #  echo "🩹 Applying $base..."
-          #  patch -p1 < "$GITHUB_WORKSPACE/$base" || true
-          #done
-          curl -L -s https://raw.githubusercontent.com/WildKernels/kernel_patches/refs/heads/main/common/droidspaces/fix_sysvipc_kabi_6_7_8.patch | patch -p1
-          echo "✅ Droidspaces GKI patches applied"
-
-      - name: Configure KernelSU / manager options
-        if: github.event.inputs.kernelsu-next == 'true'
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          echo "⚙️  Applying KSU config flags: $EXTRA_KSU_FLAGS"
-          ./scripts/config --file arch/arm64/configs/custom.config $EXTRA_KSU_FLAGS
-          echo "✅ KSU config flags applied"
-
-      - name: Import SUSFS
-        if: github.event.inputs.susfs == 'true'
-        run: |
-          set -euo pipefail
-          cd "$HOME"
-          echo "⬇️  Cloning SUSFS sources (gki-android13-5.15)..."
-          git clone -b gki-android13-5.15 https://gitlab.com/simonpunk/susfs4ksu.git
-          cd "$HOME/susfs4ksu"
-          git checkout ${{ env.SUSFS_HASH }}
-          echo "✅ SUSFS sources ready"
-
-      - name: Copy SUSFS and custom patch files
-        if: github.event.inputs.susfs == 'true'
-        run: |
-          set -euo pipefail
-          echo "📋 Copying SUSFS patch files into kernel tree..."
-          cp "$HOME/susfs4ksu/kernel_patches/KernelSU/"* "$GITHUB_WORKSPACE/KernelSU-Next/"
-          cp "$HOME/susfs4ksu/kernel_patches/50_add_susfs_in_gki-android13-5.15.patch" "$GITHUB_WORKSPACE/"
-          cp "$HOME/susfs4ksu/kernel_patches/fs/"* "$GITHUB_WORKSPACE/fs/"
-          cp "$HOME/susfs4ksu/kernel_patches/include/linux/"* "$GITHUB_WORKSPACE/include/linux/"
-          cp "$PATCHES_DIR/next/susfs_fix_patches/v${{ env.SUSFS_VERSION }}/"*.patch "$GITHUB_WORKSPACE/KernelSU-Next/"
-          echo "✅ All patch files copied"
-
-      - name: Apply SUSFS patch chain
-        if: github.event.inputs.susfs == 'true'
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-
-          #Prepare open.c for susfs patching
-          sed -i '/#ifdef CONFIG_SECURITY_DEFEX/,/^#endif/d' fs/open.c
-
-          #Prepare namespace.c for susfs patching
-          sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ {
-            /#ifdef CONFIG_KDP_NS/,/#endif/ {
-              /#else/,/#endif/!d
-              /#else/d
-              /#endif/d
-            }
-          }' fs/namespace.c
-
-          echo "🩹 Applying 50_add_susfs_in_gki-android13-5.15.patch..."
-          patch -p1 < 50_add_susfs_in_gki-android13-5.15.patch || true
-
-          cd KernelSU-Next
-          patch -p1 < 10_enable_susfs_for_ksu.patch || true
-          rm -rf < 10_enable_susfs_for_ksu.patch
-          for p in *.patch; do
-            echo "🩹 Applying $p..."
-            patch -p1 < $p || true
-            rm -f $p
-          done
-
-          echo "✅ SUSFS patch chain applied"
-
-      - name: Apply zeromount patch
-        if: github.event.inputs.zeromount == 'true'
-        run: |
-          set -euo pipefail
-          ZB="$HOME/Super-Builders"
-          ZM_PATCH="$ZB/android13-5.15/WildKSU/patches/60_zeromount-android13-5.15.patch"
-
-          echo "⬇️  Cloning Super-Builders..."
-          rm -rf "$ZB"
-          git clone --depth=1 https://github.com/jimsterino98/Super-Builders.git "$ZB"
-          if [[ ! -f "$ZM_PATCH" ]]; then
-            echo "ERROR: Zeromount patch not found: $ZM_PATCH" >&2
-            exit 1
-          fi
-
-          cd "$GITHUB_WORKSPACE"
-          echo "🩹 Applying 60_zeromount-android13-5.15.patch..."
-          cp "$ZM_PATCH" "./60_zeromount-android13-5.15.patch"
-          patch -p1 < "60_zeromount-android13-5.15.patch" || true
-          rm -f "60_zeromount-android13-5.15.patch"
-
-          if [[ -f fs/proc/task_mmu.c ]] && ! grep -q 'zeromount_spoof_mmap_metadata' fs/proc/task_mmu.c; then
-            echo "🔧 Fixing fs/proc/task_mmu.c (zeromount mmap metadata)..."
-            _zm_task_mmu=$(mktemp)
-            printf '%s\n' \
-              '#ifdef CONFIG_ZEROMOUNT' \
-              $'\tzeromount_spoof_mmap_metadata(inode, &dev, &ino);' \
-              '#endif' > "$_zm_task_mmu"
-            sed -i "/pgoff = ((loff_t)vma->vm_pgoff) << PAGE_SHIFT;/r $_zm_task_mmu" fs/proc/task_mmu.c
-            rm -f "$_zm_task_mmu"
-          fi
-
-          if [[ -f fs/stat.c.rej ]]; then
-            echo "🔧 Fixing fs/stat.c (zeromount_stat_hook)..."
-            if ! grep -q 'zeromount_stat_hook(dfd, filename, stat, request_mask, flags)' fs/stat.c; then
-              perl -0pi -e 's@(static int vfs_statx\(.*?\)\s*\{.*?orig_flow:\n#endif\n)@$1\n#ifdef CONFIG_ZEROMOUNT\n\tif (filename) {\n\t\tint zm_ret = zeromount_stat_hook(dfd, filename, stat, request_mask, flags);\n\t\tif (zm_ret != -ENOENT)\n\t\t\treturn zm_ret;\n\t}\n#endif\n\n@s' fs/stat.c
-            fi
-            rm -f fs/stat.c.rej
-          fi
-
-          if [[ -f fs/Kconfig.rej ]]; then
-            echo "🔧 Fixing fs/Kconfig (ZEROMOUNT)..."
-            if ! grep -q '^config ZEROMOUNT$' fs/Kconfig; then
-              perl -0pi -e 's@(config IO_WQ\n\tbool\n)@\1\nconfig ZEROMOUNT\n\tbool "ZeroMount Path Redirection Subsystem"\n\tdefault y\n\thelp\n\t  ZeroMount allows path redirection and virtual file injection\n\t  without mounting filesystems. Useful for systemless modifications.\n\n@' fs/Kconfig
-            fi
-            rm -f fs/Kconfig.rej
-          fi
-
-          rm -f fs/namei.c.rej fs/readdir.c.rej fs/stat.c.rej fs/proc/task_mmu.c.rej 2>/dev/null || true
-
-          echo "✅ Zeromount patch step finished (android13-5.15)"
-
-      - name: Apply BBG
-        if: github.event.inputs.bbg == 'true'
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          echo "⬇️  Applying BBG..."
-          wget -O- https://github.com/vc-teahouse/Baseband-guard/raw/main/setup.sh | bash
-          sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' security/Kconfig
-          echo "✅ BBG applied"
-
-      - name: Configure BBG option
-        if: github.event.inputs.bbg == 'true'
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          echo "⚙️  Enabling CONFIG_BASEBAND_GUARD..."
-          ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_BBG
-          echo "✅ BBG config enabled"
-
-      - name: Configure SUSFS option
-        if: github.event.inputs.susfs == 'true'
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          echo "⚙️ Enabling CONFIG_KSU_SUSFS..."
-          ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_KSU_SUSFS
-          echo "✅ SUSFS config enabled"
-
-      - name: Configure zeromount option (android13-5.15 GKI)
-        if: github.event.inputs.zeromount == 'true'
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          echo "⚙️ Enabling CONFIG_ZEROMOUNT..."
-          ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_ZEROMOUNT
-          echo "✅ Zeromount config enabled (custom.config)"
-
-      - name: Configure Mountify options
-        if: github.event.inputs.mountify == 'true'
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          echo "⚙️ Enabling Mountify options..."
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_TMPFS_XATTR \
-            --enable CONFIG_TMPFS_POSIX_ACL
-          echo "✅ Mountify options configured"
-
-      - name: Configure DroidSpaces options
-        if: github.event.inputs.droidspaces == 'true'
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          echo "⚙️  Applying DroidSpaces options to custom.config..."
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --enable CONFIG_SYSVIPC \
-            --enable CONFIG_POSIX_MQUEUE \
-            --enable CONFIG_IPC_NS \
-            --enable CONFIG_PID_NS \
-            --enable CONFIG_DEVTMPFS \
-            --enable CONFIG_NETFILTER_XT_MATCH_ADDRTYPE \
-            --enable CONFIG_NETFILTER_XT_TARGET_REJECT \
-            --enable CONFIG_NETFILTER_XT_TARGET_LOG \
-            --enable CONFIG_NETFILTER_XT_MATCH_RECENT \
-            --enable CONFIG_IP_SET \
-            --enable CONFIG_IP_SET_HASH_IP \
-            --enable CONFIG_IP_SET_HASH_NET \
-            --enable CONFIG_NETFILTER_XT_SET
-          echo "✅ DroidSpaces options configured"
-
-      - name: Add unicodefix
-        run: |  
-          cd "$GITHUB_WORKSPACE"
-          echo "⚙️ Applying unicodefix..."
-          cp "$PATCHES_DIR/common/unicode_bypass_fix_6.1-.patch" .
-          patch -p1 < unicode_bypass_fix_6.1-.patch
-          echo "✅ unicodefix applied"
-
-      - name: Add ntsync
-        if: github.event.inputs.ntsync == 'true'
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          echo "⚙️ Applying ntsync..."
-          cp "$PATCHES_DIR/common/ntsync/ntsync_base.patch" .
-          cp "$PATCHES_DIR/common/ntsync/ntsync_compat_android13-5.15.patch" .
-          patch -p1 < ntsync_base.patch || true
-          patch -p1 < ntsync_compat_android13-5.15.patch
-          echo "✅ ntsync applied"
-
-      - name: Configure NTSYNC option
-        if: github.event.inputs.ntsync == 'true'
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          echo "⚙️ Enabling CONFIG_NTSYNC..."
-          ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_NTSYNC
-          echo "✅ ntsync config enabled"
-
-      - name: Add BBRv3
-        if: github.event.inputs.bbrv3 == 'true'
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          echo "⚙️ Applying BBRv3..."
-          curl -L -s https://raw.githubusercontent.com/fatalcoder524/kernel_patches_additional/refs/heads/main/bbr3/0001-net-tcp-backport-BBRv3-to-android13-5.15.patch | patch -p1 -F3
-          echo "✅ BBRv3 applied"
-
-      - name: Configure BBRv3 option
-        if: github.event.inputs.bbrv3 == 'true'
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          echo ""
-          ./scripts/config --file arch/arm64/configs/custom.config \
-          --enable CONFIG_TCP_CONG_ADVANCED \
-          --enable CONFIG_TCP_CONG_BBR \
-          --enable CONFIG_TCP_CONG_BBR3 \
-          --enable CONFIG_TCP_CONG_CUBIC \
-          --enable CONFIG_DEFAULT_CUBIC \
-          --enable CONFIG_NET_SCH_FQ
-
-      - name: Configure localversion
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          echo "⚙️ Setting LOCALVERSION to '${{ env.BUILD_LOCALVERSION }}'..."
-          ./scripts/config --file arch/arm64/configs/custom.config \
-            --set-str CONFIG_LOCALVERSION "${{ env.BUILD_LOCALVERSION }}" \
-            --set-val CONFIG_LOCALVERSION_AUTO n
-          echo "✅ Localversion configured"
-
-      - name: Build kernel
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          export PATH="$TOOLCHAIN_DIR/bin:$PATH"
-          export CONFIGS="a54x_defconfig custom.config"
-          export KERNEL_DIR="$GITHUB_WORKSPACE"
-          export KBUILD_BUILD_HOST="Github-Actions"
-          export KBUILD_BUILD_USER="daglaroglou"
-          export PLATFORM_VERSION=16
-          export TARGET_SOC=s5e8835
-          export DEPMOD=depmod
-          MAKE_PARAMS="-j$(nproc --all) ARCH=arm64 KBUILD_OUTPUT=$GITHUB_WORKSPACE/out CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-"
-
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "🏗️  Starting kernel build"
-          echo "   Variant    : ${{ env.BUILD_VARIANT }}"
-          echo "   Version    : ${{ env.BUILD_LOCALVERSION }}"
-          echo "   Threads    : $(nproc --all)"
-          echo "   Clang      : $(clang --version | head -1)"
-          echo "   Output     : $GITHUB_WORKSPACE/out"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-          echo "⚙️  Generating .config from $CONFIGS..."
-          make $MAKE_PARAMS $CONFIGS
-
-          echo ""
-          echo "🔨 Compiling kernel..."
-          BUILD_START=$(date +%s)
-          make $MAKE_PARAMS
-          BUILD_END=$(date +%s)
-          BUILD_ELAPSED=$(( BUILD_END - BUILD_START ))
-
-          echo ""
-          echo "✅ Kernel compiled in $(( BUILD_ELAPSED / 60 ))m $(( BUILD_ELAPSED % 60 ))s"
-          echo "BUILD_ELAPSED=$BUILD_ELAPSED" >> "$GITHUB_ENV"
-
-      - name: Verify kernel build
-        run: |
-          set -euo pipefail
-          IMAGE_PATH="$GITHUB_WORKSPACE/out/arch/arm64/boot/Image"
-          echo "🔍 Verifying kernel image at $IMAGE_PATH..."
-          if [[ ! -f "$IMAGE_PATH" ]]; then
-            echo "❌ Kernel Image not found — build may have failed!"
-            exit 1
-          fi
-          IMAGE_SIZE=$(du -sh "$IMAGE_PATH" | cut -f1)
-          echo "✅ Kernel Image found — Size: $IMAGE_SIZE"
-          echo "IMAGE_SIZE=$IMAGE_SIZE" >> "$GITHUB_ENV"
-          ls -lh "$IMAGE_PATH"
-
-      - name: Create zip
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          KERNEL_NAME_RAW="${{ env.BUILD_LOCALVERSION }}"
-          KERNEL_NAME_RAW="${KERNEL_NAME_RAW#-}"
-          KERNEL_NAME_RELEASE="${KERNEL_NAME_RAW//Λ/A}"
-
-          echo "📦 Packaging kernel into flashable zip..."
-          echo "   Zip name: ${KERNEL_NAME_RELEASE}.zip"
-          cp "$GITHUB_WORKSPACE/out/arch/arm64/boot/Image" "$HOME/AnyKernel3/"
-          cd "$HOME/AnyKernel3"
-          7z a "${KERNEL_NAME_RELEASE}.zip" . -xr'!*.git*' | tail -1
-
-          ZIP_SIZE=$(du -sh "${KERNEL_NAME_RELEASE}.zip" | cut -f1)
-          echo "✅ Zip created — Size: $ZIP_SIZE"
-          echo "ZIP_NAME=${KERNEL_NAME_RELEASE}.zip" >> "$GITHUB_ENV"
-          echo "ZIP_SIZE=$ZIP_SIZE" >> "$GITHUB_ENV"
-
-      - name: Upload zipped kernel artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: kernel-${{ env.BUILD_VARIANT }}
-          path: /home/runner/AnyKernel3/*.zip
-          if-no-files-found: error
-          retention-days: 7
-
-  publish-release:
-    name: Publish GitHub Release
-    needs: [notify-start, build]
-    runs-on: ubuntu-latest
-    if: >-
-      !cancelled()
-      && needs.build.result == 'success'
-      && (needs.notify-start.result == 'success' || needs.notify-start.result == 'skipped')
-    steps:
-      - name: Set date
-        id: date
-        run: |
-          echo "DATE=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
-          echo "📅 Release date: $(date +'%Y-%m-%d')"
-
-      - name: Download all kernel artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: kernel-*
-          path: /home/runner/release
-          merge-multiple: true
-
-      - name: Verify downloaded artifacts
-        run: |
-          set -euo pipefail
-          echo "🔍 Verifying downloaded kernel artifacts..."
-          ls -lh /home/runner/release
-          shopt -s nullglob
-          files=(/home/runner/release/*.zip)
-          if [[ ${#files[@]} -eq 0 ]]; then
-            echo "❌ No kernel zips found — cannot publish release!"
-            exit 1
-          fi
-          echo "✅ Found ${#files[@]} kernel zip(s) ready to publish"
-
-      - name: Load changelog and KernelSU-Next version
-        id: meta
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          echo "📄 Reading CHANGELOG.md (contents API)..."
-          raw=$(gh api \
-            -H "Accept: application/vnd.github.raw" \
-            "repos/${{ github.repository }}/contents/CHANGELOG.md?ref=DAG")
-          CHANGELOG=$(printf '%s' "$raw" | sed 's/^[[:space:]]*//')
-          {
-            echo "CHANGELOG<<EOF"
-            printf '%s\n' "$CHANGELOG"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-          echo "🔍 Resolving latest KernelSU-Next release..."
-          KSUN_VERSION=$(gh api repos/KernelSU-Next/KernelSU-Next/releases/latest --jq .tag_name)
-          echo "   KernelSU-Next: $KSUN_VERSION"
-          echo "KSUN_VERSION=$KSUN_VERSION" >> "$GITHUB_OUTPUT"
-          echo "✅ Release metadata ready"
-
-      - name: Write workflow summary
-        run: |
-          cat >> "$GITHUB_STEP_SUMMARY" << 'EOF'
-          ## 🏗️ DΛG Kernel Build Summary
-          EOF
-
-          cat >> "$GITHUB_STEP_SUMMARY" << EOF
-          ### ⚙️ Run Info
-
-          | Field | Value |
-          |---|---|
-          | **Repository** | \`${{ github.repository }}\` |
-          | **Variant** | \`KernelSU-Next_SUSFS\` |
-          | **Date** | \`$(date +'%Y-%m-%d')\` |
-          | **Run ID** | [\`${{ github.run_id }}\`](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
-
-          ### 🛠️ Toolchain & Target
-
-          | Field | Value |
-          |---|---|
-          | **Clang** | \`r450784c\` |
-          | **Kernel Version** | \`5.15.180\` |
-          | **Architecture** | \`arm64\` |
-          | **Target SOC** | \`s5e8835\` |
-          | **Android Platform** | \`16\` |
-          | **Cross Compile** | \`aarch64-linux-gnu-\` |
-
-          ### 📦 Kernel managers
-
-          | Manager | Version |
-          |---|---|
-          | **KernelSU-Next** | \`${{ steps.meta.outputs.KSUN_VERSION }}\` |
-          | **SUSFS** | \`2.1.0\` |
-
-          ### 💸 Donation Links
-          | Field | Value |
-          |---|---|
-          | **PayPal** | https://paypal.me/daglaroglou |
-          | **Revolut** | https://revolut.me/daglaroglouc |
-          | **GitHub** | https://github.com/sponsors/daglaroglou |
-          | **BTC** | bc1qp62x7ehcvddyf6yw4ye5dy9uw8hllxhah3u447 |
-          | **ETH** | 0xcD6782ADccb748ae13a08fd2A237dABE97Df0074 |
-          EOF
-
-      - name: Publish to GitHub
-        uses: softprops/action-gh-release@v2.6.1
-        with:
-          files: /home/runner/release/*.zip
-          name: DΛG Kernels - ${{ steps.date.outputs.DATE }}
-          tag_name: ${{ steps.date.outputs.DATE }}
-          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
-          overwrite_files: true
-          body: |
-            ### Changelog
-            ${{ steps.meta.outputs.CHANGELOG }}
-
-            ### Kernel managers
-            - **KernelSU-Next:** https://github.com/KernelSU-Next/KernelSU-Next
-
-            ### SUSFS module
-            - **SUSFS:** https://github.com/sidex15/susfs4ksu-module
-
-            ### Build information
-            - **Kernel Version:** 5.15.180
-            - **Clang Version:** r450784c
-            - **KernelSU-Next Version:** ${{ steps.meta.outputs.KSUN_VERSION }}
-            - **SUSFS Version:** 2.1.0
-            ---
-            ### ❤️ Donation Links
-            | Field | Value |
-            |---|---|
-            | **PayPal** | https://paypal.me/daglaroglou |
-            | **Revolut** | https://revolut.me/daglaroglouc |
-            | **GitHub** | https://github.com/sponsors/daglaroglou |
-            | **BTC** | bc1qp62x7ehcvddyf6yw4ye5dy9uw8hllxhah3u447 |
-            | **ETH** | 0xcD6782ADccb748ae13a08fd2A237dABE97Df0074 |
-            <div align="center">
-            力を解き放つ
-            </div>
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  notify-release:
-    name: Send Release Notification
-    runs-on: ubuntu-latest
-    needs: [publish-release]
-    if: github.event.inputs.notifications == 'true' && needs.publish-release.result == 'success'
-    steps:
-      - name: Set date
-        id: date
-        run: echo "DATE=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
-
-      - name: Load changelog for Telegram
-        id: changelog
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          raw=$(gh api \
-            -H "Accept: application/vnd.github.raw" \
-            "repos/${{ github.repository }}/contents/CHANGELOG.md?ref=DAG")
-          CHANGELOG=$(printf '%s' "$raw" | sed 's/^[[:space:]]*//')
-          {
-            echo "CHANGELOG<<EOF"
-            printf '%s\n' "$CHANGELOG"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Send Telegram Release Notification
-        run: |
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-            -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -F message_thread_id="${{ secrets.TELEGRAM_MESSAGE_THREAD_ID }}" \
-            -F parse_mode="Markdown" \
-            -F disable_web_page_preview=true \
-            -F text="$(printf '%s\n' \
-              '🎉 *New DΛG Kernel Release*' \
-              '━━━━━━━━━━━━━━━━━━━━━━' \
-              '🗓️ *Date:* `${{ steps.date.outputs.DATE }}`' \
-              '🗃️ *Repo:* `${{ github.repository }}`' \
-              '━━━━━━━━━━━━━━━━━━━━━━' \
-              '📝 *Changelog*' \
-              '```' \
-              '${{ steps.changelog.outputs.CHANGELOG }}' \
-              '```' \
-              '━━━━━━━━━━━━━━━━━━━━━━' \
-              '📥 [Download from GitHub Releases](https://github.com/${{ github.repository }}/releases/tag/${{ steps.date.outputs.DATE }})')"
+            BUILD_VARIANT: KernelSU-Next_SUSFS
+            BUILD_LOCALVERSION: -DΛG-KSUN_SUSFS
+            EXTRA_KSU_FLAGS: "--enable CONFIG_KSU"
+            KERNELSU_NEXT_HASH: 30802e7260e2387176b9301377e88fc6fb0356b7
+            SUSFS_HASH: 533533f65ab756f3fbfc74a857b8bdc8131e87ab
+            KERNELSU_NEXT_VERSION: 3.2.0
+            SUSFS_VERSION: 2.2.0
+            PATCHES_DIR: /home/runner/kernel_patches
+
+        steps:
+            - name: Free disk space
+              uses: endersonmenezes/free-disk-space@v3
+              with:
+                  remove_android: true
+                  remove_dotnet: true
+                  remove_haskell: true
+                  remove_tool_cache: true
+                  remove_swap: true
+
+            - name: Checkout DAG branch
+              uses: actions/checkout@v6
+              with:
+                  ref: "DAG"
+                  fetch-depth: 1
+
+            - name: Set date and start time
+              run: |
+                  echo "DATE=$(date +'%Y-%m-%d')" >> "$GITHUB_ENV"
+                  echo "START_TIME=$(date +%s)" >> "$GITHUB_ENV"
+                  echo "📅 Build date: $(date +'%Y-%m-%d %H:%M:%S UTC')"
+                  echo "🔖 Variant: $BUILD_VARIANT"
+
+            - name: Install dependencies
+              env:
+                  DEBIAN_FRONTEND: noninteractive
+              run: |
+                  echo "📦 Updating package lists..."
+                  sudo apt-get update -qq
+
+                  echo "📦 Installing build dependencies..."
+                  sudo apt-get install -y -qq \
+                    git device-tree-compiler lz4 xz-utils zlib1g-dev openjdk-17-jdk gcc g++ python3 python-is-python3 \
+                    p7zip-full android-sdk-libsparse-utils erofs-utils default-jdk gnupg flex bison gperf build-essential \
+                    zip curl libc6-dev libncurses-dev libx11-dev libreadline-dev libgl1 libgl1-mesa-dev bc grep tofrodos \
+                    python3-markdown libxml2-utils xsltproc libtinfo6 make repo cpio kmod openssl libelf-dev pahole \
+                    libssl-dev libarchive-tools zstd rsync --fix-missing
+
+                  echo "📦 Installing libtinfo5 (legacy ncurses compatibility)..."
+                  wget -q https://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb
+                  sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb
+                  rm libtinfo5_6.3-2ubuntu0.1_amd64.deb
+
+                  echo "✅ All dependencies installed successfully"
+
+            - name: Prepare directories
+              run: |
+                  echo "📁 Creating toolchain directory at $TOOLCHAIN_DIR..."
+                  mkdir -p "$HOME/toolchain"
+                  mkdir -p "$TOOLCHAIN_DIR"
+                  echo "✅ Directories ready"
+
+            - name: Cache toolchain
+              id: cache-toolchain
+              uses: actions/cache@v5.0.4
+              with:
+                  path: ${{ env.TOOLCHAIN_DIR }}
+                  key: clang-r450784c-toolchain
+
+            - name: Fetch toolchain
+              if: steps.cache-toolchain.outputs.cache-hit != 'true'
+              run: |
+                  echo "⬇️  Cache miss — downloading Clang r450784c toolchain..."
+                  wget -q --show-progress -c "$TOOLCHAIN_ARCHIVE_URL" -O clang.tar.gz
+                  echo "📂 Extracting toolchain to $TOOLCHAIN_DIR..."
+                  tar -xf clang.tar.gz -C "$TOOLCHAIN_DIR"
+                  rm -f clang.tar.gz
+                  echo "✅ Toolchain ready at $TOOLCHAIN_DIR"
+
+            - name: Fetch AnyKernel3
+              run: |
+                  echo "⬇️  Cloning AnyKernel3 (branch: a54x)..."
+                  git clone --depth=1 --branch a54x https://github.com/daglaroglou/AnyKernel3.git "$HOME/AnyKernel3"
+                  echo "✅ AnyKernel3 ready"
+
+            - name: Fetch kernel patches (WildKernels)
+              run: |
+                  echo "⬇️  Cloning WildKernels kernel patches..."
+                  git clone https://github.com/WildKernels/kernel_patches.git "$HOME/kernel_patches"
+                  echo "✅ WildKernels kernel patches ready"
+
+            - name: Import KernelSU-Next (dev)
+              if: github.event.inputs.kernelsu-next == 'true'
+              run: |
+                  set -euo pipefail
+                  cd "$GITHUB_WORKSPACE"
+                  echo "🔧 KernelSU-Next (dev)"
+                  curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s dev
+                  cd "$GITHUB_WORKSPACE/KernelSU-Next"
+                  git checkout ${{ env.KERNELSU_NEXT_HASH }}
+                  echo "✅ KernelSU-Next driver ready"
+
+            - name: Clone Droidspaces-OSS and apply patches
+              if: github.event.inputs.droidspaces == 'true'
+              run: |
+                  set -euo pipefail
+                  #DS_SRC="$HOME/Droidspaces-OSS"
+                  #GKI_DIR="$DS_SRC/Documentation/resources/kernel-patches/GKI"
+                  #echo "⬇️  Cloning Droidspaces-OSS..."
+                  #rm -rf "$DS_SRC"
+                  #git clone --depth=1 https://github.com/ravindu644/Droidspaces-OSS.git "$DS_SRC"
+                  #if [[ ! -d "$GKI_DIR" ]]; then
+                  #  echo "❌ GKI patch directory not found: $GKI_DIR" >&2
+                  #  exit 1
+                  #fi
+                  cd "$GITHUB_WORKSPACE"
+                  #mapfile -t patchfiles < <(find "$GKI_DIR" -maxdepth 1 -type f -name '*.patch' -printf '%f\n' | LC_ALL=C sort)
+                  #for base in "${patchfiles[@]}"; do
+                  #  f="$GKI_DIR/$base"
+                  #  case "$base" in
+                  #    01.6.1+_disable_crc_checks_for_lkms.patch)
+                  #      echo "⏭️  Skipping $base"
+                  #      continue
+                  #      ;;
+                  #    03.5.10_or_lower_use_android_abi_padding_for_posix_mqueue\ copy.patch)
+                  #      echo "⏭️  Skipping $base"
+                  #      continue
+                  #      ;;
+                  #  esac
+                  #  echo "📋 Copying $base into kernel tree..."
+                  #  cp -v "$f" "$GITHUB_WORKSPACE/"
+                  #  echo "🩹 Applying $base..."
+                  #  patch -p1 < "$GITHUB_WORKSPACE/$base" || true
+                  #done
+                  curl -L -s https://raw.githubusercontent.com/WildKernels/kernel_patches/refs/heads/main/common/droidspaces/fix_sysvipc_kabi_6_7_8.patch | patch -p1
+                  echo "✅ Droidspaces GKI patches applied"
+
+            - name: Configure KernelSU / manager options
+              if: github.event.inputs.kernelsu-next == 'true'
+              run: |
+                  set -euo pipefail
+                  cd "$GITHUB_WORKSPACE"
+                  echo "⚙️  Applying KSU config flags: $EXTRA_KSU_FLAGS"
+                  ./scripts/config --file arch/arm64/configs/custom.config $EXTRA_KSU_FLAGS
+                  echo "✅ KSU config flags applied"
+
+            - name: Import SUSFS
+              if: github.event.inputs.susfs == 'true'
+              run: |
+                  set -euo pipefail
+                  cd "$HOME"
+                  echo "⬇️  Cloning SUSFS sources (gki-android13-5.15)..."
+                  git clone -b gki-android13-5.15 https://gitlab.com/simonpunk/susfs4ksu.git
+                  cd "$HOME/susfs4ksu"
+                  git checkout ${{ env.SUSFS_HASH }}
+                  echo "✅ SUSFS sources ready"
+
+            - name: Copy SUSFS and custom patch files
+              if: github.event.inputs.susfs == 'true'
+              run: |
+                  set -euo pipefail
+                  echo "📋 Copying SUSFS patch files into kernel tree..."
+                  cp "$HOME/susfs4ksu/kernel_patches/KernelSU/"* "$GITHUB_WORKSPACE/KernelSU-Next/"
+                  cp "$HOME/susfs4ksu/kernel_patches/50_add_susfs_in_gki-android13-5.15.patch" "$GITHUB_WORKSPACE/"
+                  cp "$HOME/susfs4ksu/kernel_patches/fs/"* "$GITHUB_WORKSPACE/fs/"
+                  cp "$HOME/susfs4ksu/kernel_patches/include/linux/"* "$GITHUB_WORKSPACE/include/linux/"
+                  cp "$PATCHES_DIR/next/susfs_fix_patches/v${{ env.SUSFS_VERSION }}/"*.patch "$GITHUB_WORKSPACE/KernelSU-Next/"
+                  echo "✅ All patch files copied"
+
+            - name: Apply SUSFS patch chain
+              if: github.event.inputs.susfs == 'true'
+              run: |
+                  set -euo pipefail
+                  cd "$GITHUB_WORKSPACE"
+
+                  #Prepare open.c for susfs patching
+                  sed -i '/#ifdef CONFIG_SECURITY_DEFEX/,/^#endif/d' fs/open.c
+
+                  #Prepare namespace.c for susfs patching
+                  sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ {
+                    /#ifdef CONFIG_KDP_NS/,/#endif/ {
+                      /#else/,/#endif/!d
+                      /#else/d
+                      /#endif/d
+                    }
+                  }' fs/namespace.c
+
+                  echo "🩹 Applying 50_add_susfs_in_gki-android13-5.15.patch..."
+                  patch -p1 < 50_add_susfs_in_gki-android13-5.15.patch || true
+
+                  cd KernelSU-Next
+                  patch -p1 < 10_enable_susfs_for_ksu.patch || true
+                  rm -rf < 10_enable_susfs_for_ksu.patch
+                  for p in *.patch; do
+                    echo "🩹 Applying $p..."
+                    patch -p1 < $p || true
+                    rm -f $p
+                  done
+
+                  echo "✅ SUSFS patch chain applied"
+
+            - name: Apply zeromount patch
+              if: github.event.inputs.zeromount == 'true'
+              run: |
+                  set -euo pipefail
+                  ZB="$HOME/Super-Builders"
+                  ZM_PATCH="$ZB/android13-5.15/WildKSU/patches/60_zeromount-android13-5.15.patch"
+
+                  echo "⬇️  Cloning Super-Builders..."
+                  rm -rf "$ZB"
+                  git clone --depth=1 https://github.com/jimsterino98/Super-Builders.git "$ZB"
+                  if [[ ! -f "$ZM_PATCH" ]]; then
+                    echo "ERROR: Zeromount patch not found: $ZM_PATCH" >&2
+                    exit 1
+                  fi
+
+                  cd "$GITHUB_WORKSPACE"
+                  echo "🩹 Applying 60_zeromount-android13-5.15.patch..."
+                  cp "$ZM_PATCH" "./60_zeromount-android13-5.15.patch"
+                  patch -p1 < "60_zeromount-android13-5.15.patch" || true
+                  rm -f "60_zeromount-android13-5.15.patch"
+
+                  if [[ -f fs/proc/task_mmu.c ]] && ! grep -q 'zeromount_spoof_mmap_metadata' fs/proc/task_mmu.c; then
+                    echo "🔧 Fixing fs/proc/task_mmu.c (zeromount mmap metadata)..."
+                    _zm_task_mmu=$(mktemp)
+                    printf '%s\n' \
+                      '#ifdef CONFIG_ZEROMOUNT' \
+                      $'\tzeromount_spoof_mmap_metadata(inode, &dev, &ino);' \
+                      '#endif' > "$_zm_task_mmu"
+                    sed -i "/pgoff = ((loff_t)vma->vm_pgoff) << PAGE_SHIFT;/r $_zm_task_mmu" fs/proc/task_mmu.c
+                    rm -f "$_zm_task_mmu"
+                  fi
+
+                  if [[ -f fs/stat.c.rej ]]; then
+                    echo "🔧 Fixing fs/stat.c (zeromount_stat_hook)..."
+                    if ! grep -q 'zeromount_stat_hook(dfd, filename, stat, request_mask, flags)' fs/stat.c; then
+                      perl -0pi -e 's@(static int vfs_statx\(.*?\)\s*\{.*?orig_flow:\n#endif\n)@$1\n#ifdef CONFIG_ZEROMOUNT\n\tif (filename) {\n\t\tint zm_ret = zeromount_stat_hook(dfd, filename, stat, request_mask, flags);\n\t\tif (zm_ret != -ENOENT)\n\t\t\treturn zm_ret;\n\t}\n#endif\n\n@s' fs/stat.c
+                    fi
+                    rm -f fs/stat.c.rej
+                  fi
+
+                  if [[ -f fs/Kconfig.rej ]]; then
+                    echo "🔧 Fixing fs/Kconfig (ZEROMOUNT)..."
+                    if ! grep -q '^config ZEROMOUNT$' fs/Kconfig; then
+                      perl -0pi -e 's@(config IO_WQ\n\tbool\n)@\1\nconfig ZEROMOUNT\n\tbool "ZeroMount Path Redirection Subsystem"\n\tdefault y\n\thelp\n\t  ZeroMount allows path redirection and virtual file injection\n\t  without mounting filesystems. Useful for systemless modifications.\n\n@' fs/Kconfig
+                    fi
+                    rm -f fs/Kconfig.rej
+                  fi
+
+                  rm -f fs/namei.c.rej fs/readdir.c.rej fs/stat.c.rej fs/proc/task_mmu.c.rej 2>/dev/null || true
+
+                  echo "✅ Zeromount patch step finished (android13-5.15)"
+
+            - name: Apply BBG
+              if: github.event.inputs.bbg == 'true'
+              run: |
+                  set -euo pipefail
+                  cd "$GITHUB_WORKSPACE"
+                  echo "⬇️  Applying BBG..."
+                  wget -O- https://github.com/vc-teahouse/Baseband-guard/raw/main/setup.sh | bash
+                  sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' security/Kconfig
+                  echo "✅ BBG applied"
+
+            - name: Configure BBG option
+              if: github.event.inputs.bbg == 'true'
+              run: |
+                  set -euo pipefail
+                  cd "$GITHUB_WORKSPACE"
+                  echo "⚙️  Enabling CONFIG_BASEBAND_GUARD..."
+                  ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_BBG
+                  echo "✅ BBG config enabled"
+
+            - name: Configure SUSFS option
+              if: github.event.inputs.susfs == 'true'
+              run: |
+                  set -euo pipefail
+                  cd "$GITHUB_WORKSPACE"
+                  echo "⚙️ Enabling CONFIG_KSU_SUSFS..."
+                  ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_KSU_SUSFS
+                  echo "✅ SUSFS config enabled"
+
+            - name: Configure zeromount option (android13-5.15 GKI)
+              if: github.event.inputs.zeromount == 'true'
+              run: |
+                  set -euo pipefail
+                  cd "$GITHUB_WORKSPACE"
+                  echo "⚙️ Enabling CONFIG_ZEROMOUNT..."
+                  ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_ZEROMOUNT
+                  echo "✅ Zeromount config enabled (custom.config)"
+
+            - name: Configure Mountify options
+              if: github.event.inputs.mountify == 'true'
+              run: |
+                  set -euo pipefail
+                  cd "$GITHUB_WORKSPACE"
+                  echo "⚙️ Enabling Mountify options..."
+                  ./scripts/config --file arch/arm64/configs/custom.config \
+                    --enable CONFIG_TMPFS_XATTR \
+                    --enable CONFIG_TMPFS_POSIX_ACL
+                  echo "✅ Mountify options configured"
+
+            - name: Configure DroidSpaces options
+              if: github.event.inputs.droidspaces == 'true'
+              run: |
+                  set -euo pipefail
+                  cd "$GITHUB_WORKSPACE"
+                  echo "⚙️  Applying DroidSpaces options to custom.config..."
+                  ./scripts/config --file arch/arm64/configs/custom.config \
+                    --enable CONFIG_SYSVIPC \
+                    --enable CONFIG_POSIX_MQUEUE \
+                    --enable CONFIG_IPC_NS \
+                    --enable CONFIG_PID_NS \
+                    --enable CONFIG_DEVTMPFS \
+                    --enable CONFIG_NETFILTER_XT_MATCH_ADDRTYPE \
+                    --enable CONFIG_NETFILTER_XT_TARGET_REJECT \
+                    --enable CONFIG_NETFILTER_XT_TARGET_LOG \
+                    --enable CONFIG_NETFILTER_XT_MATCH_RECENT \
+                    --enable CONFIG_IP_SET \
+                    --enable CONFIG_IP_SET_HASH_IP \
+                    --enable CONFIG_IP_SET_HASH_NET \
+                    --enable CONFIG_NETFILTER_XT_SET
+                  echo "✅ DroidSpaces options configured"
+
+            - name: Add unicodefix
+              run: |
+                  cd "$GITHUB_WORKSPACE"
+                  echo "⚙️ Applying unicodefix..."
+                  cp "$PATCHES_DIR/common/unicode_bypass_fix_6.1-.patch" .
+                  patch -p1 < unicode_bypass_fix_6.1-.patch
+                  echo "✅ unicodefix applied"
+
+            - name: Add ntsync
+              if: github.event.inputs.ntsync == 'true'
+              run: |
+                  set -euo pipefail
+                  cd "$GITHUB_WORKSPACE"
+                  echo "⚙️ Applying ntsync..."
+                  cp "$PATCHES_DIR/common/ntsync/ntsync_base.patch" .
+                  cp "$PATCHES_DIR/common/ntsync/ntsync_compat_android13-5.15.patch" .
+                  patch -p1 < ntsync_base.patch || true
+                  patch -p1 < ntsync_compat_android13-5.15.patch
+                  echo "✅ ntsync applied"
+
+            - name: Configure NTSYNC option
+              if: github.event.inputs.ntsync == 'true'
+              run: |
+                  set -euo pipefail
+                  cd "$GITHUB_WORKSPACE"
+                  echo "⚙️ Enabling CONFIG_NTSYNC..."
+                  ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_NTSYNC
+                  echo "✅ ntsync config enabled"
+
+            - name: Add BBRv3
+              if: github.event.inputs.bbrv3 == 'true'
+              run: |
+                  set -euo pipefail
+                  cd "$GITHUB_WORKSPACE"
+                  echo "⚙️ Applying BBRv3..."
+                  curl -L -s https://raw.githubusercontent.com/fatalcoder524/kernel_patches_additional/refs/heads/main/bbr3/0001-net-tcp-backport-BBRv3-to-android13-5.15.patch | patch -p1 -F3
+                  echo "✅ BBRv3 applied"
+
+            - name: Configure BBRv3 option
+              if: github.event.inputs.bbrv3 == 'true'
+              run: |
+                  set -euo pipefail
+                  cd "$GITHUB_WORKSPACE"
+                  echo ""
+                  ./scripts/config --file arch/arm64/configs/custom.config \
+                  --enable CONFIG_TCP_CONG_ADVANCED \
+                  --enable CONFIG_TCP_CONG_BBR \
+                  --enable CONFIG_TCP_CONG_BBR3 \
+                  --enable CONFIG_TCP_CONG_CUBIC \
+                  --enable CONFIG_DEFAULT_CUBIC \
+                  --enable CONFIG_NET_SCH_FQ
+
+            - name: Configure localversion
+              run: |
+                  set -euo pipefail
+                  cd "$GITHUB_WORKSPACE"
+                  echo "⚙️ Setting LOCALVERSION to '${{ env.BUILD_LOCALVERSION }}'..."
+                  ./scripts/config --file arch/arm64/configs/custom.config \
+                    --set-str CONFIG_LOCALVERSION "${{ env.BUILD_LOCALVERSION }}" \
+                    --set-val CONFIG_LOCALVERSION_AUTO n
+                  echo "✅ Localversion configured"
+
+            - name: Build kernel
+              run: |
+                  set -euo pipefail
+                  cd "$GITHUB_WORKSPACE"
+                  export PATH="$TOOLCHAIN_DIR/bin:$PATH"
+                  export CONFIGS="a54x_defconfig custom.config"
+                  export KERNEL_DIR="$GITHUB_WORKSPACE"
+                  export KBUILD_BUILD_HOST="Github-Actions"
+                  export KBUILD_BUILD_USER="daglaroglou"
+                  export PLATFORM_VERSION=16
+                  export TARGET_SOC=s5e8835
+                  export DEPMOD=depmod
+                  MAKE_PARAMS="-j$(nproc --all) ARCH=arm64 KBUILD_OUTPUT=$GITHUB_WORKSPACE/out CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-"
+
+                  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                  echo "🏗️  Starting kernel build"
+                  echo "   Variant    : ${{ env.BUILD_VARIANT }}"
+                  echo "   Version    : ${{ env.BUILD_LOCALVERSION }}"
+                  echo "   Threads    : $(nproc --all)"
+                  echo "   Clang      : $(clang --version | head -1)"
+                  echo "   Output     : $GITHUB_WORKSPACE/out"
+                  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+                  echo "⚙️  Generating .config from $CONFIGS..."
+                  make $MAKE_PARAMS $CONFIGS
+
+                  echo ""
+                  echo "🔨 Compiling kernel..."
+                  BUILD_START=$(date +%s)
+                  make $MAKE_PARAMS
+                  BUILD_END=$(date +%s)
+                  BUILD_ELAPSED=$(( BUILD_END - BUILD_START ))
+
+                  echo ""
+                  echo "✅ Kernel compiled in $(( BUILD_ELAPSED / 60 ))m $(( BUILD_ELAPSED % 60 ))s"
+                  echo "BUILD_ELAPSED=$BUILD_ELAPSED" >> "$GITHUB_ENV"
+
+            - name: Verify kernel build
+              run: |
+                  set -euo pipefail
+                  IMAGE_PATH="$GITHUB_WORKSPACE/out/arch/arm64/boot/Image"
+                  echo "🔍 Verifying kernel image at $IMAGE_PATH..."
+                  if [[ ! -f "$IMAGE_PATH" ]]; then
+                    echo "❌ Kernel Image not found — build may have failed!"
+                    exit 1
+                  fi
+                  IMAGE_SIZE=$(du -sh "$IMAGE_PATH" | cut -f1)
+                  echo "✅ Kernel Image found — Size: $IMAGE_SIZE"
+                  echo "IMAGE_SIZE=$IMAGE_SIZE" >> "$GITHUB_ENV"
+                  ls -lh "$IMAGE_PATH"
+
+            - name: Create zip
+              run: |
+                  set -euo pipefail
+                  cd "$GITHUB_WORKSPACE"
+                  KERNEL_NAME_RAW="${{ env.BUILD_LOCALVERSION }}"
+                  KERNEL_NAME_RAW="${KERNEL_NAME_RAW#-}"
+                  KERNEL_NAME_RELEASE="${KERNEL_NAME_RAW//Λ/A}"
+
+                  echo "📦 Packaging kernel into flashable zip..."
+                  echo "   Zip name: ${KERNEL_NAME_RELEASE}.zip"
+                  cp "$GITHUB_WORKSPACE/out/arch/arm64/boot/Image" "$HOME/AnyKernel3/"
+                  cd "$HOME/AnyKernel3"
+                  7z a "${KERNEL_NAME_RELEASE}.zip" . -xr'!*.git*' | tail -1
+
+                  ZIP_SIZE=$(du -sh "${KERNEL_NAME_RELEASE}.zip" | cut -f1)
+                  echo "✅ Zip created — Size: $ZIP_SIZE"
+                  echo "ZIP_NAME=${KERNEL_NAME_RELEASE}.zip" >> "$GITHUB_ENV"
+                  echo "ZIP_SIZE=$ZIP_SIZE" >> "$GITHUB_ENV"
+
+            - name: Upload zipped kernel artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: kernel-${{ env.BUILD_VARIANT }}
+                  path: /home/runner/AnyKernel3/*.zip
+                  if-no-files-found: error
+                  retention-days: 7
+
+    publish-release:
+        name: Publish GitHub Release
+        needs: [notify-start, build]
+        runs-on: ubuntu-latest
+        if: >-
+            !cancelled()
+            && needs.build.result == 'success'
+            && (needs.notify-start.result == 'success' || needs.notify-start.result == 'skipped')
+        steps:
+            - name: Set date
+              id: date
+              run: |
+                  echo "DATE=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
+                  echo "📅 Release date: $(date +'%Y-%m-%d')"
+
+            - name: Download all kernel artifacts
+              uses: actions/download-artifact@v4
+              with:
+                  pattern: kernel-*
+                  path: /home/runner/release
+                  merge-multiple: true
+
+            - name: Verify downloaded artifacts
+              run: |
+                  set -euo pipefail
+                  echo "🔍 Verifying downloaded kernel artifacts..."
+                  ls -lh /home/runner/release
+                  shopt -s nullglob
+                  files=(/home/runner/release/*.zip)
+                  if [[ ${#files[@]} -eq 0 ]]; then
+                    echo "❌ No kernel zips found — cannot publish release!"
+                    exit 1
+                  fi
+                  echo "✅ Found ${#files[@]} kernel zip(s) ready to publish"
+
+            - name: Load changelog and KernelSU-Next version
+              id: meta
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  set -euo pipefail
+                  echo "📄 Reading CHANGELOG.md (contents API)..."
+                  raw=$(gh api \
+                    -H "Accept: application/vnd.github.raw" \
+                    "repos/${{ github.repository }}/contents/CHANGELOG.md?ref=DAG")
+                  CHANGELOG=$(printf '%s' "$raw" | sed 's/^[[:space:]]*//')
+                  {
+                    echo "CHANGELOG<<EOF"
+                    printf '%s\n' "$CHANGELOG"
+                    echo "EOF"
+                  } >> "$GITHUB_OUTPUT"
+
+                  echo "🔍 Resolving latest KernelSU-Next release..."
+                  KSUN_VERSION=$(gh api repos/KernelSU-Next/KernelSU-Next/releases/latest --jq .tag_name)
+                  echo "   KernelSU-Next: $KSUN_VERSION"
+                  echo "KSUN_VERSION=$KSUN_VERSION" >> "$GITHUB_OUTPUT"
+                  echo "✅ Release metadata ready"
+
+            - name: Write workflow summary
+              run: |
+                  cat >> "$GITHUB_STEP_SUMMARY" << 'EOF'
+                  ## 🏗️ DΛG Kernel Build Summary
+                  EOF
+
+                  cat >> "$GITHUB_STEP_SUMMARY" << EOF
+                  ### ⚙️ Run Info
+
+                  | Field | Value |
+                  |---|---|
+                  | **Repository** | \`${{ github.repository }}\` |
+                  | **Variant** | \`KernelSU-Next_SUSFS\` |
+                  | **Date** | \`$(date +'%Y-%m-%d')\` |
+                  | **Run ID** | [\`${{ github.run_id }}\`](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
+
+                  ### 🛠️ Toolchain & Target
+
+                  | Field | Value |
+                  |---|---|
+                  | **Clang** | \`r450784c\` |
+                  | **Kernel Version** | \`5.15.180\` |
+                  | **Architecture** | \`arm64\` |
+                  | **Target SOC** | \`s5e8835\` |
+                  | **Android Platform** | \`16\` |
+                  | **Cross Compile** | \`aarch64-linux-gnu-\` |
+
+                  ### 📦 Kernel managers
+
+                  | Manager | Version |
+                  |---|---|
+                  | **KernelSU-Next** | \`${{ steps.meta.outputs.KSUN_VERSION }}\` |
+                  | **SUSFS** | \`2.1.0\` |
+
+                  ### 💸 Donation Links
+                  | Field | Value |
+                  |---|---|
+                  | **PayPal** | https://paypal.me/daglaroglou |
+                  | **Revolut** | https://revolut.me/daglaroglouc |
+                  | **GitHub** | https://github.com/sponsors/daglaroglou |
+                  | **BTC** | bc1qp62x7ehcvddyf6yw4ye5dy9uw8hllxhah3u447 |
+                  | **ETH** | 0xcD6782ADccb748ae13a08fd2A237dABE97Df0074 |
+                  EOF
+
+            - name: Publish to GitHub
+              uses: softprops/action-gh-release@v2.6.1
+              with:
+                  files: /home/runner/release/*.zip
+                  name: DΛG Kernels - ${{ steps.date.outputs.DATE }}
+                  tag_name: ${{ steps.date.outputs.DATE }}
+                  prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+                  overwrite_files: true
+                  body: |
+                      ### Changelog
+                      ${{ steps.meta.outputs.CHANGELOG }}
+
+                      ### Kernel managers
+                      - **KernelSU-Next:** https://github.com/KernelSU-Next/KernelSU-Next
+
+                      ### SUSFS module
+                      - **SUSFS:** https://github.com/sidex15/susfs4ksu-module
+
+                      ### Build information
+                      - **Kernel Version:** 5.15.180
+                      - **Clang Version:** r450784c
+                      - **KernelSU-Next Version:** ${{ steps.meta.outputs.KSUN_VERSION }}
+                      - **SUSFS Version:** 2.1.0
+                      ---
+                      ### ❤️ Donation Links
+                      | Field | Value |
+                      |---|---|
+                      | **PayPal** | https://paypal.me/daglaroglou |
+                      | **Revolut** | https://revolut.me/daglaroglouc |
+                      | **GitHub** | https://github.com/sponsors/daglaroglou |
+                      | **BTC** | bc1qp62x7ehcvddyf6yw4ye5dy9uw8hllxhah3u447 |
+                      | **ETH** | 0xcD6782ADccb748ae13a08fd2A237dABE97Df0074 |
+                      <div align="center">
+                      力を解き放つ
+                      </div>
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    notify-release:
+        name: Send Release Notification
+        runs-on: ubuntu-latest
+        needs: [publish-release]
+        if: github.event.inputs.notifications == 'true' && needs.publish-release.result == 'success'
+        steps:
+            - name: Set date
+              id: date
+              run: echo "DATE=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
+
+            - name: Load changelog for Telegram
+              id: changelog
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  set -euo pipefail
+                  raw=$(gh api \
+                    -H "Accept: application/vnd.github.raw" \
+                    "repos/${{ github.repository }}/contents/CHANGELOG.md?ref=DAG")
+                  CHANGELOG=$(printf '%s' "$raw" | sed 's/^[[:space:]]*//')
+                  {
+                    echo "CHANGELOG<<EOF"
+                    printf '%s\n' "$CHANGELOG"
+                    echo "EOF"
+                  } >> "$GITHUB_OUTPUT"
+
+            - name: Send Telegram Release Notification
+              run: |
+                  curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+                    -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+                    -F message_thread_id="${{ secrets.TELEGRAM_MESSAGE_THREAD_ID }}" \
+                    -F parse_mode="Markdown" \
+                    -F disable_web_page_preview=true \
+                    -F text="$(printf '%s\n' \
+                      '🎉 *New DΛG Kernel Release*' \
+                      '━━━━━━━━━━━━━━━━━━━━━━' \
+                      '🗓️ *Date:* `${{ steps.date.outputs.DATE }}`' \
+                      '🗃️ *Repo:* `${{ github.repository }}`' \
+                      '━━━━━━━━━━━━━━━━━━━━━━' \
+                      '📝 *Changelog*' \
+                      '```' \
+                      '${{ steps.changelog.outputs.CHANGELOG }}' \
+                      '```' \
+                      '━━━━━━━━━━━━━━━━━━━━━━' \
+                      '📥 [Download from GitHub Releases](https://github.com/${{ github.repository }}/releases/tag/${{ steps.date.outputs.DATE }})')"
