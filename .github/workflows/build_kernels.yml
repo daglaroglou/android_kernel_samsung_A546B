@@ -188,13 +188,13 @@ jobs:
                   git clone https://github.com/WildKernels/kernel_patches.git "$HOME/kernel_patches"
                   echo "✅ WildKernels kernel patches ready"
 
-            - name: Import KernelSU-Next (dev)
+            - name: Import KernelSU-Next by @pershoot (dev-susfs)
               if: github.event.inputs.kernelsu-next == 'true'
               run: |
                   set -euo pipefail
                   cd "$GITHUB_WORKSPACE"
-                  echo "🔧 KernelSU-Next (dev)"
-                  curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s dev
+                  echo "🔧 KernelSU-Next (dev-susfs)"
+                  curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/next/kernel/setup.sh" | bash -s dev-susfs
                   cd "$GITHUB_WORKSPACE/KernelSU-Next"
                   git checkout ${{ env.KERNELSU_NEXT_HASH }}
                   echo "✅ KernelSU-Next driver ready"
