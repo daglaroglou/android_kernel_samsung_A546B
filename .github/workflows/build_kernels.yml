@@ -117,10 +117,10 @@ jobs:
                   remove_tool_cache: true
                   remove_swap: true
 
-            - name: Checkout DAG branch
+            - name: Checkout branch
               uses: actions/checkout@v6
               with:
-                  ref: "DAG"
+                  ref: ${{ github.ref_name }}
                   fetch-depth: 1
 
             - name: Set date and start time
