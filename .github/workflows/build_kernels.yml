@@ -194,9 +194,13 @@ jobs:
                   set -euo pipefail
                   cd "$GITHUB_WORKSPACE"
                   echo "🔧 KernelSU-Next (dev-susfs)"
-                  curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/next/kernel/setup.sh" | bash -s dev-susfs
-                  cd "$GITHUB_WORKSPACE/KernelSU-Next"
-                  git checkout ${{ env.KERNELSU_NEXT_HASH }}
+                  if [[ ${{ inputs.susfs }} == 'true' ]]; then
+                   curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/next/kernel/setup.sh" | bash -s dev-susfs
+                  else
+                   curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/next/kernel/setup.sh" | bash -s dev
+                  fi
+                  #cd "$GITHUB_WORKSPACE/KernelSU-Next"
+                  #git checkout ${{ env.KERNELSU_NEXT_HASH }}
                   echo "✅ KernelSU-Next driver ready"
 
             - name: Clone Droidspaces-OSS and apply patches
@@ -250,8 +254,13 @@ jobs:
                   cd "$HOME"
                   echo "⬇️  Cloning SUSFS sources (gki-android13-5.15)..."
                   git clone -b gki-android13-5.15 https://gitlab.com/simonpunk/susfs4ksu.git
-                  cd "$HOME/susfs4ksu"
-                  git checkout ${{ env.SUSFS_HASH }}
+                  git config --global user.name "github-actions[bot]"
+                  git config --global user.email "41898282+github-actions[bot]@://github.com"
+                  
+                  cd susfs4ksu
+                  git fetch https://gitlab.com/pershoot/susfs4ksu.git gki-android14-6.1-dev
+                  git log ..FETCH_HEAD --oneline -n 2 | awk '{print $1}' | tac | xargs git cherry-pick
+                  #git checkout ${{ env.SUSFS_HASH }}
                   echo "✅ SUSFS sources ready"
 
             - name: Copy SUSFS and custom patch files
@@ -259,11 +268,11 @@ jobs:
               run: |
                   set -euo pipefail
                   echo "📋 Copying SUSFS patch files into kernel tree..."
-                  cp "$HOME/susfs4ksu/kernel_patches/KernelSU/"* "$GITHUB_WORKSPACE/KernelSU-Next/"
+                  #cp "$HOME/susfs4ksu/kernel_patches/KernelSU/"* "$GITHUB_WORKSPACE/KernelSU-Next/"
                   cp "$HOME/susfs4ksu/kernel_patches/50_add_susfs_in_gki-android13-5.15.patch" "$GITHUB_WORKSPACE/"
                   cp "$HOME/susfs4ksu/kernel_patches/fs/"* "$GITHUB_WORKSPACE/fs/"
                   cp "$HOME/susfs4ksu/kernel_patches/include/linux/"* "$GITHUB_WORKSPACE/include/linux/"
-                  cp "$PATCHES_DIR/next/susfs_fix_patches/v${{ env.SUSFS_VERSION }}/"*.patch "$GITHUB_WORKSPACE/KernelSU-Next/"
+                  #cp "$PATCHES_DIR/next/susfs_fix_patches/v${{ env.SUSFS_VERSION }}/"*.patch "$GITHUB_WORKSPACE/KernelSU-Next/"
                   echo "✅ All patch files copied"
 
             - name: Apply SUSFS patch chain
@@ -287,14 +296,26 @@ jobs:
                   echo "🩹 Applying 50_add_susfs_in_gki-android13-5.15.patch..."
                   patch -p1 < 50_add_susfs_in_gki-android13-5.15.patch || true
 
-                  cd KernelSU-Next
-                  patch -p1 < 10_enable_susfs_for_ksu.patch || true
-                  rm -rf < 10_enable_susfs_for_ksu.patch
-                  for p in *.patch; do
-                    echo "🩹 Applying $p..."
-                    patch -p1 < $p || true
-                    rm -f $p
-                  done
+                  # SUSFS's OPEN_REDIRECT code unconditionally calls VMA_PAD_START(), which
+                  # only exists on GKI branches that carry Google's page-size-migration
+                  # feature (added to each android version's kernel/common branch at a
+                  # different, sometime later, os_patch_level). Older os_patch_levels in
+                  # our build matrix predate it, so fall back to a no-padding definition
+                  # when the real header/macro isn't present. This is version-agnostic and
+                  # a no-op wherever the real header already provides it.
+                  if grep -q 'VMA_PAD_START(' fs/proc/task_mmu.c && ! grep -qE '#include <linux/pgsize_migration(_inline)?\.h>|define VMA_PAD_START' fs/proc/task_mmu.c; then
+                    sed -i '1a #ifndef VMA_PAD_START\n#define VMA_PAD_START(vma) ((vma)->vm_end)\n#endif' fs/proc/task_mmu.c
+                    echo "Added VMA_PAD_START fallback definition to fs/proc/task_mmu.c"
+                  fi
+                  
+                  #cd KernelSU-Next
+                  #patch -p1 < 10_enable_susfs_for_ksu.patch || true
+                  #rm -rf < 10_enable_susfs_for_ksu.patch
+                  #for p in *.patch; do
+                  #  echo "🩹 Applying $p..."
+                  #  patch -p1 < $p || true
+                  #  rm -f $p
+                  #done
 
                   echo "✅ SUSFS patch chain applied"
 
