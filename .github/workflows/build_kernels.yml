@@ -197,7 +197,7 @@ jobs:
                   if [[ ${{ inputs.susfs }} == 'true' ]]; then
                    curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/next/kernel/setup.sh" | bash -s dev-susfs
                   else
-                   curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/next/kernel/setup.sh" | bash -s dev-susfs
+                   curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/next/kernel/setup.sh" | bash -s dev
                   fi
                   #cd "$GITHUB_WORKSPACE/KernelSU-Next"
                   #git checkout ${{ env.KERNELSU_NEXT_HASH }}
