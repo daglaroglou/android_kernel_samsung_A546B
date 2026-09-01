@@ -99,12 +99,11 @@ jobs:
         runs-on: ubuntu-latest
         env:
             BUILD_VARIANT: KernelSU-Next_SUSFS
-            BUILD_LOCALVERSION: -DΛG-KSUN_SUSFS
+            BUILD_LOCALVERSION: -DAG-KSNSFS
             EXTRA_KSU_FLAGS: "--enable CONFIG_KSU"
-            KERNELSU_NEXT_HASH: 30802e7260e2387176b9301377e88fc6fb0356b7
-            SUSFS_HASH: 533533f65ab756f3fbfc74a857b8bdc8131e87ab
+            SUSFS_HASH: 529919fbc9f8aee6ee70eb3a8890ef33af0a109c
             KERNELSU_NEXT_VERSION: 3.2.0
-            SUSFS_VERSION: 2.2.0
+            SUSFS_VERSION: 2.3.0
             PATCHES_DIR: /home/runner/kernel_patches
 
         steps:
@@ -199,8 +198,6 @@ jobs:
                   else
                    curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/next/kernel/setup.sh" | bash -s dev
                   fi
-                  #cd "$GITHUB_WORKSPACE/KernelSU-Next"
-                  #git checkout ${{ env.KERNELSU_NEXT_HASH }}
                   echo "✅ KernelSU-Next driver ready"
 
             - name: Clone Droidspaces-OSS and apply patches
@@ -431,6 +428,7 @@ jobs:
                     --enable CONFIG_IPC_NS \
                     --enable CONFIG_PID_NS \
                     --enable CONFIG_DEVTMPFS \
+                    --enable CONFIG_USER_NS \
                     --enable CONFIG_NETFILTER_XT_MATCH_ADDRTYPE \
                     --enable CONFIG_NETFILTER_XT_TARGET_REJECT \
                     --enable CONFIG_NETFILTER_XT_TARGET_LOG \
@@ -671,7 +669,7 @@ jobs:
                   | Manager | Version |
                   |---|---|
                   | **KernelSU-Next** | \`${{ steps.meta.outputs.KSUN_VERSION }}\` |
-                  | **SUSFS** | \`2.1.0\` |
+                  | **SUSFS** | \`2.3.0\` |
 
                   ### 💸 Donation Links
                   | Field | Value |
@@ -705,7 +703,7 @@ jobs:
                       - **Kernel Version:** 5.15.180
                       - **Clang Version:** r450784c
                       - **KernelSU-Next Version:** ${{ steps.meta.outputs.KSUN_VERSION }}
-                      - **SUSFS Version:** 2.1.0
+                      - **SUSFS Version:** 2.3.0
                       ---
                       ### ❤️ Donation Links
                       | Field | Value |
